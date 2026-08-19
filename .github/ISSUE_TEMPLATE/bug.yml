@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a reproducible software defect using synthetic or public-safe data.
+title: "[Bug]: "
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach credentials, licensed market data, or a private strategy. Security issues must use private reporting.
+  - type: input
+    id: version
+    attributes:
+      label: AlphaVerdict version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Data contract or adapter
+        - Strategy SDK
+        - Screen or backtest
+        - Audit council
+        - Report or manifest
+        - CLI or packaging
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected contract
+      description: What documented behavior or invariant should hold?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal synthetic reproduction
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: OS, Python version, install method, relevant optional dependencies
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Data safety
+      options:
+        - label: This report contains no secrets, licensed data, or private strategy logic.
+          required: true

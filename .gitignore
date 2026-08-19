@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.hypothesis/
+site/
+.nox/
+.tox/
+.tmp-demo/
+demo-runs/
+*.log
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
+
+# User data and generated research artifacts
+/data/
+/reports/
+/runs/
+/artifacts/
+*.parquet
+*.feather
+*.duckdb
+*.sqlite
+*.sqlite3
+
+# Keep small, explicitly documented fixtures
+!examples/**/data/
+!tests/fixtures/

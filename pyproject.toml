@@ -1,0 +1,204 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "alphaverdict"
+version = "0.1.0"
+description = "A point-in-time, adversarial research engine for stock strategies."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "AlphaVerdict contributors" }]
+keywords = [
+  "backtesting",
+  "finance",
+  "point-in-time",
+  "quantitative-research",
+  "stocks",
+  "strategy-validation",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Financial and Insurance Industry",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Office/Business :: Financial :: Investment",
+  "Typing :: Typed",
+]
+dependencies = [
+  "jinja2>=3.1.6,<4",
+  "numpy>=2.0,<2.5",
+  "pandas>=2.2,<4",
+  "pyyaml>=6.0.2,<7",
+  "rich>=14.0,<15",
+  "typer>=0.16,<1",
+]
+
+[project.optional-dependencies]
+parquet = ["pyarrow>=23.0.1,<24"]
+dev = [
+  "bandit[toml]>=1.8.6,<2",
+  "build>=1.2.2,<2",
+  "hypothesis>=6.138,<7",
+  "mypy>=1.17,<2",
+  "pip-audit>=2.9,<3",
+  "pre-commit>=4.3,<5",
+  "pytest>=9.0.3,<10",
+  "pytest-cov>=6.2,<7",
+  "ruff>=0.16.3,<1",
+  "types-pyyaml>=6.0.12,<7",
+]
+docs = [
+  "mkdocs>=1.6,<2",
+  "mkdocs-material>=9.6,<10",
+  "mkdocstrings[python]>=0.30,<1",
+]
+
+[project.scripts]
+alphaverdict = "alphaverdict.cli:app"
+
+[project.urls]
+Documentation = "https://github.com/omrgpt/alpha-verdict/tree/main/docs"
+Issues = "https://github.com/omrgpt/alpha-verdict/issues"
+Source = "https://github.com/omrgpt/alpha-verdict"
+
+[project.entry-points."alphaverdict.data_adapters"]
+csv = "alphaverdict.data.csv:CSVBundleAdapter"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/alphaverdict"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/tests",
+  "/docs",
+  "/examples",
+  "/README.md",
+  "/LICENSE",
+  "/NOTICE",
+  "/CHANGELOG.md",
+  "/DISCLAIMER.md",
+  "/CONTRIBUTING.md",
+  "/CODE_OF_CONDUCT.md",
+  "/GOVERNANCE.md",
+  "/ROADMAP.md",
+  "/SUPPORT.md",
+  "/CITATION.cff",
+  "/SECURITY.md",
+  "/mkdocs.yml",
+  "/Dockerfile",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "A",
+  "ARG",
+  "B",
+  "BLE",
+  "C4",
+  "DTZ",
+  "E",
+  "F",
+  "FA",
+  "FLY",
+  "FURB",
+  "I",
+  "ICN",
+  "N",
+  "PERF",
+  "PIE",
+  "PL",
+  "PTH",
+  "RUF",
+  "S",
+  "SIM",
+  "T20",
+  "TC",
+  "TRY",
+  "UP",
+  "W",
+]
+ignore = [
+  "E501",      # formatter deliberately leaves long prose strings intact
+  "PERF401",   # explicit append loops are clearer in research ledgers
+  "PLR0911",   # type dispatch is clearer as guarded returns
+  "PLR0913",   # explicit financial assumptions are safer than option bags
+  "PLR0917",   # finding construction is a stable internal record boundary
+  "PLR2004",   # statistical thresholds are meaningful at their call sites
+  "S105",      # enum value HealthStatus.PASS is not a credential
+  "TC001",     # runtime dataclasses and protocols intentionally retain imports
+  "TC002",
+  "TC003",
+  "TRY003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ARG", "S101"]
+"examples/**/*.py" = ["T201"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["alphaverdict"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+show_error_codes = true
+pretty = true
+packages = ["alphaverdict"]
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["numpy.*", "pandas.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[tool.pytest.ini_options]
+addopts = [
+  "--strict-config",
+  "--strict-markers",
+  "-ra",
+  "--cov=alphaverdict",
+  "--cov-branch",
+  "--cov-report=term-missing:skip-covered",
+  "--cov-report=xml",
+  "--cov-fail-under=90",
+]
+testpaths = ["tests"]
+markers = [
+  "integration: tests that exercise multiple public components",
+  "slow: statistically intensive tests",
+]
+
+[tool.coverage.run]
+source = ["alphaverdict"]
+branch = true
+parallel = true
+
+[tool.coverage.report]
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.:",
+  "raise NotImplementedError",
+  "@abstractmethod",
+]
+show_missing = true
+skip_covered = true
+
+[tool.bandit]
+exclude_dirs = ["tests", "examples"]
+skips = ["B101"]

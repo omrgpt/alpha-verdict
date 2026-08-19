@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AlphaVerdict · {{ run_id }}</title>
+  <style>
+    :root { color-scheme: dark; --bg:#060a12; --panel:#0d1524; --line:#233047; --text:#edf2f7; --muted:#9aa9bf; --teal:#5eead4; --red:#fb7185; --amber:#fbbf24; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(circle at 10% 0,#10243a 0,var(--bg) 38%); color:var(--text); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif; }
+    main { width:min(1120px,calc(100% - 32px)); margin:48px auto 80px; }
+    header { display:flex; justify-content:space-between; gap:24px; align-items:end; border-bottom:1px solid var(--line); padding-bottom:24px; }
+    h1 { font-size:clamp(32px,6vw,64px); letter-spacing:-.055em; margin:0; }
+    h2 { font-size:20px; margin:0 0 16px; }
+    .eyebrow,.muted { color:var(--muted); } .eyebrow { text-transform:uppercase; letter-spacing:.14em; font-size:12px; }
+    .verdict { font-size:22px; font-weight:800; text-transform:uppercase; color:var(--teal); }
+    .verdict.fail { color:var(--red); } .verdict.warn { color:var(--amber); }
+    .grid { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; margin-top:20px; }
+    .panel { grid-column:span 12; padding:22px; background:color-mix(in srgb,var(--panel) 92%,transparent); border:1px solid var(--line); border-radius:16px; }
+    .half { grid-column:span 6; } .third { grid-column:span 4; }
+    .score { font-size:52px; font-weight:850; letter-spacing:-.06em; }
+    .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+    .metric { background:var(--panel); padding:14px; } .metric strong { display:block; font-size:18px; margin-top:4px; }
+    ol { padding-left:22px; } li { margin:10px 0; }
+    .finding { border-top:1px solid var(--line); padding:16px 0; } .finding:first-of-type { border-top:0; }
+    .tag { display:inline-block; border:1px solid currentColor; border-radius:99px; padding:2px 8px; font-size:11px; text-transform:uppercase; }
+    .critical,.high { color:var(--red); } .medium { color:var(--amber); } .low,.info { color:var(--teal); }
+    code { overflow-wrap:anywhere; color:var(--teal); } footer { margin-top:28px; color:var(--muted); font-size:13px; }
+    @media (max-width:760px) { .half,.third { grid-column:span 12; } header { align-items:start; flex-direction:column; } }
+  </style>
+</head>
+<body><main>
+  <header>
+    <div><div class="eyebrow">Point-in-time strategy research</div><h1>AlphaVerdict</h1><div class="muted">Run <code>{{ run_id }}</code> · {{ result.strategy_name }}</div></div>
+    <div><div class="verdict {{ audit.verdict.value }}">{{ audit.verdict.value }}</div><div class="muted">Audit verdict, not a trading signal</div></div>
+  </header>
+  <section class="grid">
+    <article class="panel third"><div class="eyebrow">Evidence score</div><div class="score">{{ audit.score }}</div><div class="muted">out of 100</div></article>
+    <article class="panel third"><div class="eyebrow">Audit findings</div><div class="score">{{ audit.findings|length }}</div><div class="muted">{{ audit.agent_reports|length }} independent reviewers</div></article>
+    <article class="panel third"><div class="eyebrow">Evaluated periods</div><div class="score">{{ result.returns|length }}</div><div class="muted">{{ result.config.rebalance.value }} rebalance</div></article>
+    <article class="panel"><h2>Equity path</h2>{{ equity_svg|safe }}<p class="muted">Teal: strategy · gray: configured benchmark. Hypothetical, after configured friction.</p></article>
+    <article class="panel"><h2>Research metrics</h2><div class="metrics">{% for name, value in metrics %}<div class="metric"><span class="muted">{{ name }}</span><strong>{{ value }}</strong></div>{% endfor %}</div></article>
+    <article class="panel half"><h2>Priority validation work</h2><ol>{% for item in audit.recommendations %}<li>{{ item }}</li>{% else %}<li>No additional recommendation was generated.</li>{% endfor %}</ol></article>
+    <article class="panel half"><h2>Run identity</h2><p class="muted">Data</p><code>{{ result.data_fingerprint }}</code><p class="muted">Strategy</p><code>{{ result.strategy_fingerprint }}</code></article>
+    <article class="panel"><h2>Findings</h2>{% for finding in audit.findings %}<div class="finding"><span class="tag {{ finding.severity.label }}">{{ finding.severity.label }}</span> <strong>{{ finding.code }} · {{ finding.title }}</strong><p>{{ finding.evidence }}</p><p class="muted">Next: {{ finding.recommendation }}</p></div>{% else %}<p>No configured reviewer produced a finding.</p>{% endfor %}</article>
+    <article class="panel"><h2>Research boundary</h2><p>{{ audit.caveat }}</p>{% for warning in result.warnings %}<p class="muted">{{ warning }}</p>{% endfor %}</article>
+  </section>
+  <footer>Evidence through {{ generated_at }}. Open <code>result.json</code>, <code>audit.json</code>, and <code>manifest.json</code> for machine-readable evidence.</footer>
+</main></body></html>

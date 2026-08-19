@@ -1,0 +1,43 @@
+version: 1
+
+data:
+  adapter: csv
+  options:
+    prices: data/prices.csv
+    features: data/features.csv
+    events: data/events.csv
+    universe: data/universe.csv
+    metadata:
+      price_adjustment: declare-real-policy
+      survivorship: declare-real-policy
+
+strategy: strategies/multimodal.py:Strategy
+
+request:
+  start: 2015-01-01
+  symbols: []
+  kinds: [prices, features, events, universe]
+
+screen:
+  top_n: 20
+
+backtest:
+  rebalance: weekly
+  top_k: 10
+  weighting: equal
+  max_weight: 0.20
+  commission_bps: 5
+  slippage_bps: 10
+  benchmark_symbol:
+  seed: 7
+
+audit:
+  n_trials: 1
+  bootstrap_simulations: 500
+  permutation_simulations: 500
+  confidence: 0.95
+  cost_multipliers: [0, 1, 2, 5]
+  seed: 7
+
+output_dir: runs
+allow_outside_root: false

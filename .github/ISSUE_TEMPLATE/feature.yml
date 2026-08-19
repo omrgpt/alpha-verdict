@@ -1,0 +1,39 @@
+name: Research capability proposal
+description: Propose a scoped contract, reviewer, adapter primitive, or workflow improvement.
+title: "[Proposal]: "
+labels: [enhancement, needs-triage]
+body:
+  - type: textarea
+    id: job
+    attributes:
+      label: Research job
+      description: Who has what problem, and what do they do today?
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Proposed contract and boundary
+      description: Describe inputs, outputs, temporal semantics, and what remains out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Link primary methodology, comparable projects, or synthetic failures.
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Failure modes and security impact
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope confirmation
+      options:
+        - label: This proposal does not add broker execution, performance promises, proprietary data, or a non-stock asset class.
+          required: true

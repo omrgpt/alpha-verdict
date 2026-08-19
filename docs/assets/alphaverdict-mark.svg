@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">AlphaVerdict</title>
+  <desc id="desc">A teal alpha mark with an evidence check.</desc>
+  <defs>
+    <linearGradient id="g" x1="18" y1="12" x2="108" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="30" fill="#07111f"/>
+  <path d="M31 89 54 32h16l23 57H78l-5-14H50l-5 14H31Zm24-27h13l-6-18-7 18Z" fill="url(#g)"/>
+  <path d="m70 91 10 10 21-25" fill="none" stroke="#f8fafc" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

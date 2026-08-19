@@ -1,0 +1,31 @@
+name: Adapter proposal
+description: Propose or report a provider-neutral adapter integration pattern.
+title: "[Adapter]: "
+labels: [adapter, needs-triage]
+body:
+  - type: input
+    id: source
+    attributes:
+      label: Data source category
+      placeholder: warehouse, licensed API, local database, public filing archive
+    validations:
+      required: true
+  - type: textarea
+    id: temporal
+    attributes:
+      label: Temporal and revision semantics
+      description: Explain event time, availability time, revisions, membership, delistings, and corporate actions.
+    validations:
+      required: true
+  - type: textarea
+    id: licensing
+    attributes:
+      label: Licensing and credential model
+    validations:
+      required: true
+  - type: textarea
+    id: conformance
+    attributes:
+      label: Synthetic conformance plan
+    validations:
+      required: true

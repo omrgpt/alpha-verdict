@@ -1,0 +1,62 @@
+site_name: AlphaVerdict
+site_description: The point-in-time stock strategy research engine.
+site_url: https://omrgpt.github.io/alpha-verdict/
+repo_url: https://github.com/omrgpt/alpha-verdict
+repo_name: omrgpt/alpha-verdict
+edit_uri: edit/main/docs/
+strict: true
+theme:
+  name: material
+  logo: assets/alphaverdict-mark.svg
+  favicon: assets/alphaverdict-mark.svg
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+  palette:
+    scheme: slate
+    primary: teal
+    accent: cyan
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Core contracts:
+      - Data contract: data-contract.md
+      - Strategy SDK: strategy-sdk.md
+      - Adapters: adapters.md
+  - Research integrity:
+      - Methodology: methodology.md
+      - Audit council: audit-council.md
+      - Reproducibility: reproducibility.md
+  - Design:
+      - Architecture: architecture.md
+      - Decisions:
+          - Stocks-only scope: decisions/0001-scope.md
+          - Bitemporal data: decisions/0002-bitemporal-data.md
+          - Deterministic agents: decisions/0003-deterministic-agents.md
+      - Security: security.md
+      - Product-market fit: product-market-fit.md
+      - Competitive positioning: competitive-positioning.md
+  - Reference:
+      - Configuration: configuration.md
+      - CLI: cli.md
+      - API: api.md
+  - Contributing: contributing.md
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: false
