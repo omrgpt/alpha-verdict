@@ -9,6 +9,7 @@ credentials and never mutates anything outside the configured project directorie
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, ClassVar
@@ -22,12 +23,16 @@ from alphaverdict.data.reference import RealMomentumStrategy, YFinanceBundleAdap
 from alphaverdict.demo import DemoEvidenceStrategy, synthetic_bundle
 from alphaverdict.engine.backtest import BacktestEngine
 from alphaverdict.engine.models import BacktestConfig, RebalanceFrequency
-from alphaverdict.exceptions import AlphaVerdictError
+from alphaverdict.engine.screen import screen as run_screen
+from alphaverdict.exceptions import AlphaVerdictError, SecurityBoundaryError
 from alphaverdict.report.render import write_run_report
 
 PROTOCOL_VERSION = "2025-06-18"
 SUPPORTED_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 SERVER_NAME = "alphaverdict"
+MAX_LINE_BYTES = 1_048_576
+ROOT_ENV = "ALPHAVERDICT_MCP_ROOT"
+DEBUG_ENV = "ALPHAVERDICT_MCP_DEBUG"
 
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
@@ -193,6 +198,20 @@ def tool_definitions() -> list[dict[str, Any]]:
             ),
         },
         {
+            "name": "run_screen",
+            "description": (
+                "Rank one AlphaVerdict project's universe at a point in time and return "
+                "the top-ranked symbols with scores."
+            ),
+            "inputSchema": _schema(
+                {
+                    "project_path": {"type": "string"},
+                    "as_of": {"type": "string", "description": "Optional decision date."},
+                },
+                required=["project_path"],
+            ),
+        },
+        {
             "name": "explain_finding",
             "description": "Explain one AlphaVerdict finding code and its remediation.",
             "inputSchema": _schema({"code": {"type": "string"}}, required=["code"]),
@@ -242,13 +261,7 @@ def run_demo_verdict(*, fast: bool = False) -> dict[str, Any]:
 
 def run_project_verdict(project_path: str, *, fast: bool = False) -> dict[str, Any]:
     """Backtest and audit one trusted local project directory."""
-    root = Path(project_path).expanduser().resolve()
-    config_path = root / "alphaverdict.yml"
-    if not root.is_dir():
-        raise AlphaVerdictError(f"project directory does not exist: {root}")
-    if not config_path.is_file():
-        raise AlphaVerdictError(f"missing alphaverdict.yml in {root}")
-    project = load_project(config_path)
+    project = load_project(_confined_config_path(project_path))
     bundle = project.make_adapter().load(project.request)
     strategy = project.make_strategy()
     engine = project.make_engine()
@@ -264,6 +277,34 @@ def run_project_verdict(project_path: str, *, fast: bool = False) -> dict[str, A
     summary = _audit_summary(audit, result.manifest.get("run_id"), strategy.name)
     summary["report_path"] = str(artifacts.report)
     return summary
+
+
+def run_project_screen(project_path: str, as_of: str | None = None) -> dict[str, Any]:
+    """Rank one trusted project's universe at a point in time."""
+    project = load_project(_confined_config_path(project_path))
+    bundle = project.make_adapter().load(project.request)
+    result = run_screen(
+        bundle,
+        project.make_strategy(),
+        as_of=as_of,
+        top_n=project.screen.top_n,
+        minimum_score=project.screen.minimum_score,
+    )
+    return {
+        "strategy": result.strategy_name,
+        "as_of": result.as_of.isoformat(),
+        "ranked": result.ranked.head(20).to_dict(orient="records"),
+    }
+
+
+def _confined_config_path(project_path: str) -> Path:
+    root_value = os.environ.get(ROOT_ENV, "").strip()
+    resolved = Path(project_path).expanduser().resolve()
+    if root_value:
+        root = Path(root_value).expanduser().resolve()
+        if resolved != root and root not in resolved.parents:
+            raise SecurityBoundaryError(f"project path escapes {ROOT_ENV}: {project_path}")
+    return resolved / "alphaverdict.yml"
 
 
 def run_reference_verdict(*, fast: bool = False) -> dict[str, Any]:
@@ -329,8 +370,15 @@ def _dispatch_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     elif name == "run_project_verdict":
         path_value = arguments.get("project_path")
         if not isinstance(path_value, str) or not path_value.strip():
-            raise ValueError("project_path must be a non-empty string")
+            raise TypeError("project_path must be a non-empty string")
         payload = run_project_verdict(path_value, fast=bool(arguments.get("fast", False)))
+    elif name == "run_screen":
+        path_value = arguments.get("project_path")
+        if not isinstance(path_value, str) or not path_value.strip():
+            raise TypeError("project_path must be a non-empty string")
+        as_of_value = arguments.get("as_of")
+        as_of = as_of_value if isinstance(as_of_value, str) and as_of_value.strip() else None
+        payload = run_project_screen(path_value, as_of)
     elif name == "explain_finding":
         code_value = arguments.get("code")
         if not isinstance(code_value, str):
@@ -444,13 +492,31 @@ def handle_line(line: str) -> str | None:
     return json.dumps(response, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
+def _debug(message: str) -> None:
+    if os.environ.get(DEBUG_ENV, "").strip() not in {"", "0", "false"}:
+        sys.stderr.write(f"{SERVER_NAME}-mcp[debug]: {message}\n")
+
+
 def serve(reader: Any = None, writer: Any = None) -> int:
     """Serve MCP over stdio until EOF; returns a process exit code."""
     source = reader if reader is not None else sys.stdin
     target = writer if writer is not None else sys.stdout
     sys.stderr.write(f"{SERVER_NAME}-mcp {__version__}: serving deterministic tools on stdio\n")
-    for line in source:
-        response = handle_line(line if isinstance(line, str) else line.decode("utf-8"))
+    for raw_line in source:
+        line = raw_line if isinstance(raw_line, str) else raw_line.decode("utf-8")
+        response: str | None
+        if len(line.encode("utf-8")) > MAX_LINE_BYTES:
+            response = json.dumps(
+                _failure(None, INVALID_REQUEST, f"request exceeds {MAX_LINE_BYTES} bytes"),
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+            )
+        else:
+            _debug(f"<- {line.strip()[:200]}")
+            response = handle_line(line)
+            if response is not None:
+                _debug(f"-> {response[:200]}")
         if response is not None:
             target.write(response + "\n")
             target.flush()

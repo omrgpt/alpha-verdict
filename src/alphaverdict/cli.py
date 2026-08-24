@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -15,6 +15,7 @@ from alphaverdict.agents.council import AuditCouncil
 from alphaverdict.config.reader import load_project
 from alphaverdict.demo import run_real_demo, run_synthetic_demo
 from alphaverdict.engine.screen import screen as run_screen
+from alphaverdict.engine.walkforward import WalkForwardConfig, walk_forward
 from alphaverdict.exceptions import AlphaVerdictError
 from alphaverdict.mcp_server import serve as serve_mcp
 from alphaverdict.report.render import write_run_report, write_screen_result
@@ -134,6 +135,9 @@ def backtest(
     config: Annotated[Path, typer.Option("--config", "-c", help="Project YAML.")] = Path(
         "alphaverdict.yml"
     ),
+    as_json: Annotated[
+        bool, typer.Option("--json", help="Emit a machine-readable verdict summary.")
+    ] = False,
 ) -> None:
     """Run causal research, the audit council, and a portable evidence report."""
     try:
@@ -146,10 +150,78 @@ def backtest(
         artifacts = write_run_report(result, audit, project.output_path)
     except (AlphaVerdictError, OSError, TypeError, ValueError) as exc:
         _fail(exc)
+    if as_json:
+        summary = {
+            "verdict": audit.verdict.value,
+            "score": audit.score,
+            "strategy": strategy.name,
+            "run_id": result.manifest.get("run_id"),
+            "report_path": str(artifacts.report),
+            "findings": [
+                {"code": finding.code, "severity": finding.severity.label}
+                for finding in audit.findings
+            ],
+        }
+        console.print_json(json.dumps(_json_safe(summary), default=str))
+        return
     console.print(
         f"[bold]Verdict {audit.verdict.value.upper()} | evidence score {audit.score}/100[/bold]"
     )
+    table = Table(title="Audit findings", show_lines=False)
+    for column in ("severity", "code", "finding"):
+        table.add_column(column)
+    for finding in audit.findings[:10]:
+        table.add_row(finding.severity.label.upper(), finding.code, finding.title)
+    if not audit.findings:
+        table.add_row("-", "-", "no findings; this run survived every configured reviewer")
+    console.print(table)
     console.print(f"Report: {artifacts.report}")
+
+
+@app.command("walkforward")
+def walkforward_command(
+    config: Annotated[Path, typer.Option("--config", "-c", help="Project YAML.")] = Path(
+        "alphaverdict.yml"
+    ),
+    train: Annotated[int, typer.Option(help="Training rebalance periods per fold.")] = 52,
+    test: Annotated[int, typer.Option("--test", help="Out-of-sample periods per fold.")] = 13,
+    embargo: Annotated[int, typer.Option(help="Embargo periods between train and test.")] = 2,
+) -> None:
+    """Evaluate the strategy across embargoed contiguous walk-forward folds."""
+    try:
+        project = load_project(config)
+        bundle = project.make_adapter().load(project.request)
+        strategy = project.make_strategy()
+        settings = WalkForwardConfig(
+            train_periods=train, test_periods=test, embargo_periods=embargo
+        )
+        result = walk_forward(bundle, strategy, project.make_engine(), settings)
+        output_dir = project.output_path
+        output_dir.mkdir(parents=True, exist_ok=True)
+        artifact = output_dir / "walkforward.json"
+        artifact.write_text(json.dumps(_json_safe(result.to_dict()), indent=2) + "\n")
+    except (AlphaVerdictError, OSError, TypeError, ValueError) as exc:
+        _fail(exc)
+    console.print(
+        f"[bold]Walk-forward: {len(result.folds)} folds | hint {result.verdict_hint.upper()}[/bold]"
+    )
+    table = Table(title="Fold evidence")
+    for column in ("fold", "train return", "test return", "test sharpe", "test drawdown"):
+        table.add_column(column)
+    for fold in result.folds:
+        table.add_row(
+            str(fold.index),
+            f"{fold.train_total_return:.2%}",
+            f"{fold.test_total_return:.2%}",
+            f"{fold.test_sharpe:.3f}",
+            f"{fold.test_max_drawdown:.2%}",
+        )
+    console.print(table)
+    if result.degradation_ratio is not None:
+        console.print(f"OOS/IS Sharpe retention: {result.degradation_ratio:.0%}")
+    for warning in result.warnings:
+        console.print(f"[yellow]{warning}[/yellow]")
+    console.print(f"Artifact: {artifact}")
 
 
 @app.command()
@@ -165,11 +237,38 @@ def demo(
             help="Use public Yahoo Finance daily data instead of the synthetic fixture.",
         ),
     ] = False,
+    period: Annotated[
+        str | None,
+        typer.Option(help="[real] Download window: 1y, 5y, max, ..."),
+    ] = None,
+    top_k: Annotated[
+        int | None, typer.Option("--top-k", help="[real] Portfolio breadth per rebalance.")
+    ] = None,
+    benchmark: Annotated[str | None, typer.Option(help="[real] Benchmark symbol.")] = None,
+    symbols: Annotated[
+        str | None,
+        typer.Option(help="[real] Comma-separated watchlist overriding the default universe."),
+    ] = None,
 ) -> None:
     """Exercise every layer: synthetic plumbing demo or public-data reference run."""
+    parsed_symbols: tuple[str, ...] | None = None
+    if symbols is not None:
+        parsed_symbols = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+        if not parsed_symbols:
+            _fail(ValueError("--symbols must contain at least one ticker"))
+            return
     try:
         if real:
-            outcome = run_real_demo(output, seed=seed)
+            options: dict[str, Any] = {}
+            if period is not None:
+                options["period"] = period
+            if top_k is not None:
+                options["top_k"] = top_k
+            if benchmark is not None:
+                options["benchmark"] = benchmark
+            if parsed_symbols is not None:
+                options["symbols"] = parsed_symbols
+            outcome = run_real_demo(output, seed=seed, **options)
             console.print(
                 "[bold yellow]Public snapshot on a current-listing universe; "
                 "survivorship limits apply. Not investment advice.[/bold yellow]"
@@ -184,6 +283,11 @@ def demo(
     console.print(
         f"[bold]{outcome.audit.verdict.value.upper()} | evidence score {outcome.audit.score}/100[/bold]"
     )
+    timings = outcome.result.manifest.get("timings") or {}
+    if timings:
+        console.print(
+            f"backtest {timings.get('backtest_seconds', '-')}s · audit {timings.get('audit_seconds', '-')}s"
+        )
     console.print(f"Report: {outcome.artifacts.report}")
 
 

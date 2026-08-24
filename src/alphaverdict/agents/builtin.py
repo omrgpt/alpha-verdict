@@ -248,9 +248,14 @@ class RobustnessAgent:
                 )
             )
         cost_curve: dict[str, float] = {}
+        plan = context.engine.prepare(context.bundle, context.strategy.clone())
+        base_commission = context.engine.config.commission_bps
+        base_slippage = context.engine.config.slippage_bps
         for multiplier in context.config.cost_multipliers:
-            stressed = context.engine.with_cost_multiplier(multiplier).run(
-                context.bundle, context.strategy.clone()
+            stressed = context.engine.replay(
+                plan,
+                commission_bps=base_commission * multiplier,
+                slippage_bps=base_slippage * multiplier,
             )
             cost_curve[f"{multiplier:g}x"] = float(stressed.metrics.get("total_return", 0.0) or 0.0)
         base = cost_curve.get("1x", float(context.result.metrics.get("total_return", 0.0) or 0.0))

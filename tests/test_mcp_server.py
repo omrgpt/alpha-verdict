@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 from pathlib import Path
@@ -11,6 +12,7 @@ import pandas as pd
 import pytest
 
 from alphaverdict.mcp_server import (
+    MAX_LINE_BYTES,
     PROTOCOL_VERSION,
     FindingKnowledge,
     handle_line,
@@ -64,6 +66,7 @@ def test_tools_list_advertises_expected_tools() -> None:
     assert names == {
         "run_demo_verdict",
         "run_project_verdict",
+        "run_screen",
         "explain_finding",
         "list_findings",
     }
@@ -294,3 +297,66 @@ def test_negotiate_version_matrix() -> None:
     assert negotiate_version("2025-03-26") == "2025-03-26"
     assert negotiate_version(None) != ""
     assert negotiate_version(42) != ""
+
+
+# ---------------------------------------------------------------------------
+# Hardening: root confinement, oversized lines, screen tool
+
+
+@pytest.mark.slow
+def test_run_screen_tool_returns_ranked_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_project(tmp_path)
+    monkeypatch.delenv("ALPHAVERDICT_MCP_ROOT", raising=False)
+    response = handle_message(
+        _request(
+            "tools/call",
+            name="run_screen",
+            arguments={"project_path": str(tmp_path)},
+        )
+    )
+    assert response is not None
+    body = response["result"]
+    assert body["isError"] is False
+    payload = body["structuredContent"]
+    assert payload["ranked"]
+    assert {"symbol", "score"} <= set(payload["ranked"][0])
+
+
+def test_root_confinement_blocks_outside_projects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inside = tmp_path / "inside"
+    inside.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    monkeypatch.setenv("ALPHAVERDICT_MCP_ROOT", str(inside))
+    response = handle_message(
+        _request("tools/call", name="run_project_verdict", arguments={"project_path": str(outside)})
+    )
+    assert response is not None
+    assert response["result"]["isError"] is True
+    assert "ALPHAVERDICT_MCP_ROOT" in response["result"]["content"][0]["text"]
+
+
+def test_oversized_line_rejected_without_parse(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ALPHAVERDICT_MCP_DEBUG", raising=False)
+    huge = "{" + " " * (MAX_LINE_BYTES + 10)
+    reader = io.StringIO(huge + "\n")
+    writer = io.StringIO()
+    code = serve(reader, writer)
+    assert code == 0
+    payload = json.loads(writer.getvalue().splitlines()[0])
+    assert payload["error"]["code"] == -32600
+    assert "exceeds" in payload["error"]["message"]
+
+
+def test_debug_env_traces_to_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ALPHAVERDICT_MCP_DEBUG", "1")
+    reader = io.StringIO(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"}) + "\n")
+    writer = io.StringIO()
+    stderr_buffer = io.StringIO()
+    with contextlib.redirect_stderr(stderr_buffer):
+        serve(reader, writer)
+    assert "mcp[debug]" in stderr_buffer.getvalue()

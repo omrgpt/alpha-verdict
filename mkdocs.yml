@@ -29,6 +29,7 @@ nav:
   - Research integrity:
       - Methodology: methodology.md
       - Audit council: audit-council.md
+      - Walk-forward: walkforward.md
       - Reproducibility: reproducibility.md
   - AI agents:
       - MCP server: mcp.md

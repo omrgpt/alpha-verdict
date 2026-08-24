@@ -10,6 +10,34 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - External adapter conformance kit and independently reproduced reference fixtures.
 
+## [0.3.0] - 2026-08-24
+
+### Added
+
+- Walk-forward evaluation engine with embargoed contiguous folds
+  (`alphaverdict walkforward`), pooled out-of-sample metrics, degradation ratio,
+  deterministic verdict hints, and a JSON artifact.
+- Reference adapter production hardening: batched downloads (<=25 tickers),
+  exponential-backoff retries, vectorized row mapping, and an optional local disk
+  cache (`cache_dir`, `max_age_hours`).
+- MCP hardening: `run_screen` tool, `ALPHAVERDICT_MCP_ROOT` path confinement,
+  1 MiB request-line cap, and optional stderr debug tracing.
+- CLI: `--json` machine-readable summaries for `backtest`, terminal findings
+  table, real-demo passthrough options (`--period`, `--top-k`, `--benchmark`,
+  `--symbols`), and backtest/audit timings recorded in every manifest.
+- GitHub Action now appends the verdict to `$GITHUB_STEP_SUMMARY`.
+
+### Changed
+
+- `BacktestEngine` split into cost-independent `prepare()` and pure-arithmetic
+  `replay()`; the robustness reviewer replays the cost curve from one prepared
+  plan instead of rerunning the full pipeline per multiplier.
+- `ResearchSnapshot` gained cached close/open matrices and
+  `trailing_momentum(lookback)`; bundled strategies no longer re-pivot full price
+  history on every decision date.
+- Package version is single-sourced from `src/alphaverdict/_version.py` via
+  hatch dynamic versioning.
+
 ## [0.2.0] - 2026-08-23
 
 ### Added
@@ -43,6 +71,7 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Reproducibility manifests, typed public package, 90% coverage gate, security automation,
   and comprehensive documentation.
 
-[Unreleased]: https://github.com/omrgpt/alpha-verdict/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/omrgpt/alpha-verdict/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/omrgpt/alpha-verdict/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/omrgpt/alpha-verdict/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/omrgpt/alpha-verdict/releases/tag/v0.1.0

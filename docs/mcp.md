@@ -43,13 +43,22 @@ claude mcp add alphaverdict -- uvx alphaverdict mcp
 | --- | --- | --- |
 | `run_demo_verdict` | `{fast?: boolean}` | Runs the full pipeline on clearly labelled synthetic data and returns the merged verdict. |
 | `run_project_verdict` | `{project_path: string, fast?: boolean}` | Backtests and audits one trusted local project directory (must contain `alphaverdict.yml`). Writes the standard artifact bundle and returns the verdict summary plus the report path. |
+| `run_screen` | `{project_path: string, as_of?: string}` | Ranks the project's universe at one point in time and returns the top rows with scores. |
 | `explain_finding` | `{code: string}` | Returns the stable explanation and remediation for one finding code (for example `COST_FRAGILE`). |
 | `list_findings` | `{}` | Lists every finding code the council can emit. |
 
 Tool errors are returned as MCP results with `isError: true`; malformed JSON-RPC
 maps to the standard `-32700`, `-32600`, `-32601`, and `-32603` error codes.
-Protocol versions `2025-06-18`, `2025-03-26`, and `2024-11-05` are supported
-during initialization negotiation.
+Requests larger than 1 MiB are rejected without parsing. Protocol versions
+`2025-06-18`, `2025-03-26`, and `2024-11-05` are supported during initialization
+negotiation.
+
+## Environment hardening
+
+| Variable | Effect |
+| --- | --- |
+| `ALPHAVERDICT_MCP_ROOT` | When set, `project_path` arguments must resolve inside this directory; anything else raises a security-boundary error result. Recommended for any shared or hosted setup. |
+| `ALPHAVERDICT_MCP_DEBUG` | Set to `1` to trace each request/response pair (truncated) to stderr. |
 
 ## Security posture
 

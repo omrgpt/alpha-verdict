@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "alphaverdict"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Adversarial research verdicts for stock strategies - deterministic reviewers that try to falsify your backtest."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -79,6 +79,9 @@ Source = "https://github.com/omrgpt/alpha-verdict"
 [project.entry-points."alphaverdict.data_adapters"]
 csv = "alphaverdict.data.csv:CSVBundleAdapter"
 yfinance = "alphaverdict.data.reference:YFinanceBundleAdapter"
+
+[tool.hatch.version]
+path = "src/alphaverdict/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/alphaverdict"]

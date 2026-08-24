@@ -67,7 +67,18 @@ def test_scaffold_creates_reviewable_project_and_refuses_overwrite(tmp_path: Pat
 
 def test_package_versions_cannot_drift() -> None:
     project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-    assert project["project"]["version"] == __version__
+    assert "version" in project["project"]["dynamic"]
+    hatch_version = project["tool"]["hatch"]["version"]
+    assert hatch_version["path"] == "src/alphaverdict/_version.py"
+    assert __version__ == hatch_version_source()
+
+
+def hatch_version_source() -> str:
+    text = Path("src/alphaverdict/_version.py").read_text(encoding="utf-8")
+    for line in text.splitlines():
+        if line.startswith("__version__"):
+            return line.split("=", 1)[1].strip().strip('"').strip("'")
+    raise AssertionError("_version.py does not define __version__")
 
 
 def test_config_loads_strict_runtime(demo_bundle, tmp_path: Path) -> None:

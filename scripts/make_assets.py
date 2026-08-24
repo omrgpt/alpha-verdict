@@ -1,4 +1,4 @@
-﻿"""Generate committable README hero assets and example verdict reports.
+"""Generate committable README hero assets and example verdict reports.
 
 Runs two deterministic synthetic pipelines (a healthy sample and a deliberately
 corrupted sample), renders their self-contained reports, extracts the real audit
@@ -26,6 +26,7 @@ from alphaverdict.data.bundle import DataBundle
 from alphaverdict.demo import DemoEvidenceStrategy, run_synthetic_demo, synthetic_bundle
 from alphaverdict.engine.backtest import BacktestEngine
 from alphaverdict.engine.models import BacktestConfig, RebalanceFrequency
+from alphaverdict.report.render import write_run_report
 
 VERDICT_COLORS = {
     "pass": "#34d399",
@@ -107,7 +108,7 @@ def card_svg(title: str, subtitle: str, audit: dict[str, Any]) -> str:
   <text x="488" y="92" font-family="{SANS}" font-size="26" font-weight="700" fill="#e2e8f0" text-anchor="end">{score}<tspan fill="#475569" font-size="16">/100</tspan></text>
   <rect x="32" y="100" width="456" height="8" rx="4" fill="#16233f"/>
   <rect x="32" y="100" width="{bar_width}" height="8" rx="4" fill="{accent}"/>
-  {''.join(chips)}
+  {"".join(chips)}
   <text x="32" y="166" font-family="{MONO}" font-size="11" fill="#475569">{findings_note} - deterministic reviewers - not investment advice</text>
 </svg>
 """
@@ -191,8 +192,6 @@ def sabotaged_run() -> tuple[dict[str, Any], Path]:
             seed=7,
         ),
     )
-    from alphaverdict.report.render import write_run_report
-
     artifacts = write_run_report(result, audit, Path("_asset-runs"))
     return audit.to_dict(), artifacts.report
 
@@ -218,7 +217,10 @@ def write_assets(docs_root: Path) -> list[Path]:
         path.write_text(content, encoding="utf-8")
         written.append(path)
 
-    for source, name in ((healthy_report, "report-pass.html"), (sabotaged_report, "report-fail.html")):
+    for source, name in (
+        (healthy_report, "report-pass.html"),
+        (sabotaged_report, "report-fail.html"),
+    ):
         if Path(source).is_file():
             target = examples_dir / name
             shutil.copyfile(source, target)

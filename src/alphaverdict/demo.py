@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,7 +15,6 @@ from alphaverdict.audit.models import AuditConfig, AuditReport
 from alphaverdict.data.bundle import DataBundle
 from alphaverdict.data.contracts import DataRequest
 from alphaverdict.data.reference import RealMomentumStrategy, YFinanceBundleAdapter
-from alphaverdict.data.technicals import momentum
 from alphaverdict.engine.backtest import BacktestEngine
 from alphaverdict.engine.models import BacktestConfig, BacktestResult, RebalanceFrequency
 from alphaverdict.report.render import RunArtifacts, write_run_report
@@ -123,8 +123,8 @@ class DemoEvidenceStrategy(StockStrategy):
     momentum_sessions: int = 63
 
     def score(self, snapshot: ResearchSnapshot) -> pd.DataFrame:
-        prices = snapshot.price_history(sessions=self.momentum_sessions + 1)
-        price_score = momentum(prices, self.momentum_sessions)
+        snapshot.price_history(sessions=self.momentum_sessions + 1)
+        price_score = snapshot.trailing_momentum(self.momentum_sessions)
         quality = snapshot.latest_features(["quality_score"]).get(
             "quality_score", pd.Series(dtype=float)
         )
@@ -168,9 +168,17 @@ def _run_and_audit(
     audit_config: AuditConfig | None,
     output: Path,
 ) -> DemoOutcome:
+    backtest_started = time.perf_counter()
     engine = BacktestEngine(config)
     result = engine.run(bundle, strategy)
+    backtest_seconds = time.perf_counter() - backtest_started
+    audit_started = time.perf_counter()
     audit = AuditCouncil().review(bundle, strategy, engine, result, audit_config)
+    audit_seconds = time.perf_counter() - audit_started
+    result.manifest["timings"] = {
+        "backtest_seconds": round(backtest_seconds, 4),
+        "audit_seconds": round(audit_seconds, 4),
+    }
     artifacts = write_run_report(result, audit, output)
     return DemoOutcome(result=result, audit=audit, artifacts=artifacts)
 

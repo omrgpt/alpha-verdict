@@ -22,6 +22,46 @@ class ResearchSnapshot:
     universe: tuple[str, ...]
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def _cache(self) -> dict[str, Any]:
+        cache = getattr(self, "_matrix_cache", None)
+        if cache is None:
+            cache = {}
+            object.__setattr__(self, "_matrix_cache", cache)
+        return cache
+
+    def close_matrix(self) -> pd.DataFrame:
+        """Cached date-by-symbol close pivot for this snapshot."""
+        cache = self._cache()
+        if "close_matrix" not in cache:
+            cache["close_matrix"] = (
+                self.prices.pivot(index="timestamp", columns="symbol", values="close")
+                .sort_index()
+                .copy()
+            )
+        matrix: pd.DataFrame = cache["close_matrix"]
+        return matrix
+
+    def open_matrix(self) -> pd.DataFrame:
+        """Cached date-by-symbol open pivot for this snapshot."""
+        cache = self._cache()
+        if "open_matrix" not in cache:
+            cache["open_matrix"] = (
+                self.prices.pivot(index="timestamp", columns="symbol", values="open")
+                .sort_index()
+                .copy()
+            )
+        matrix: pd.DataFrame = cache["open_matrix"]
+        return matrix
+
+    def trailing_momentum(self, lookback: int) -> pd.Series:
+        """Latest trailing total return per symbol from the cached close matrix."""
+        if lookback < 1:
+            raise ValueError("lookback must be positive")
+        matrix = self.close_matrix()
+        if len(matrix) <= lookback:
+            return pd.Series(dtype=float)
+        return matrix.iloc[-1] / matrix.iloc[-lookback - 1] - 1
+
     @classmethod
     def from_bundle(cls, bundle: DataBundle, as_of: pd.Timestamp | str) -> ResearchSnapshot:
         timestamp = _timestamp(as_of)

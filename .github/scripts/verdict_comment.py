@@ -182,6 +182,14 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(markdown)
         return 0
 
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "").strip()
+    if summary_path:
+        try:
+            with Path(summary_path).open("a", encoding="utf-8") as handle:
+                handle.write("\n" + markdown)
+        except OSError:
+            sys.stderr.write("could not append to GITHUB_STEP_SUMMARY; continuing\n")
+
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
     repo = arguments.repo.strip()
     pr_number = arguments.pr
