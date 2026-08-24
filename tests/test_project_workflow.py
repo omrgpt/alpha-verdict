@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from alphaverdict import __version__, cli
+import alphaverdict.demo as demo_module
+from alphaverdict import __version__
 from alphaverdict.audit.models import AuditReport, Verdict
 from alphaverdict.cli import app
 from alphaverdict.config.reader import load_project
@@ -158,8 +159,12 @@ def test_cli_version_init_validate_and_screen(demo_bundle, tmp_path: Path) -> No
 
 
 def test_cli_demo_uses_synthetic_warning(monkeypatch, tmp_path: Path) -> None:
-    original = cli.synthetic_bundle
-    monkeypatch.setattr(cli, "synthetic_bundle", lambda seed: original(seed=seed, sessions=130))
+    original = demo_module.synthetic_bundle
+    monkeypatch.setattr(
+        demo_module,
+        "synthetic_bundle",
+        lambda seed, sessions=520: original(seed=seed, sessions=130),
+    )
     result = CliRunner().invoke(app, ["demo", "--output", str(tmp_path), "--seed", "5"])
     assert result.exit_code == 0
     assert "Synthetic demo only" in result.output

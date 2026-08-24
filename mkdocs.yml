@@ -30,6 +30,9 @@ nav:
       - Methodology: methodology.md
       - Audit council: audit-council.md
       - Reproducibility: reproducibility.md
+  - AI agents:
+      - MCP server: mcp.md
+      - GitHub Action: github-action.md
   - Design:
       - Architecture: architecture.md
       - Decisions:

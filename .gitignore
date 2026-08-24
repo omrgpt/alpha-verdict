@@ -55,3 +55,7 @@ secrets*.json
 # Keep small, explicitly documented fixtures
 !examples/**/data/
 !tests/fixtures/
+
+_asset-runs/
+smoke-runs/
+

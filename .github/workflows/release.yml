@@ -30,6 +30,8 @@ jobs:
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: "dist/*"
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@76e52bc4940c43b57942636913f9b1c568250384 # v1.13.0
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

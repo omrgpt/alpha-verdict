@@ -1,0 +1,117 @@
+name: 'AlphaVerdict Research Verdict'
+description: >
+  Run the AlphaVerdict adversarial audit council on your strategy project and
+  post the deterministic verdict as a pull-request comment.
+author: 'AlphaVerdict contributors'
+
+branding:
+  icon: 'shield'
+  color: 'teal'
+
+inputs:
+  config-path:
+    description: 'Path to the project alphaverdict.yml, relative to working-directory.'
+    required: false
+    default: 'alphaverdict.yml'
+  working-directory:
+    description: 'Directory containing the project configuration and data.'
+    required: false
+    default: '.'
+  python-version:
+    description: 'Python version used to install and run AlphaVerdict.'
+    required: false
+    default: '3.12'
+  extra-install-args:
+    description: 'Extra pip arguments, e.g. "alphaverdict[real]" extras or index options.'
+    required: false
+    default: ''
+  pr-number:
+    description: 'Pull request number. Defaults to the triggering pull request.'
+    required: false
+    default: ''
+  github-token:
+    description: 'Token used to post the verdict comment.'
+    required: false
+    default: ${{ github.token }}
+  post-comment:
+    description: 'Whether to post the verdict comment to the pull request.'
+    required: false
+    default: 'true'
+
+outputs:
+  verdict:
+    description: 'The merged council verdict (pass, warn, or fail).'
+    value: ${{ steps.verdict.outputs.verdict }}
+  score:
+    description: 'Evidence score out of 100.'
+    value: ${{ steps.verdict.outputs.score }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install AlphaVerdict from this ref
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "alphaverdict[real] @ git+https://github.com/${{ github.action_repository }}@${{ github.action_ref }}" ${{ inputs.extra-install-args }}
+
+    - name: Run research backtest and audit council
+      id: run
+      shell: bash
+      continue-on-error: true
+      working-directory: ${{ inputs.working-directory }}
+      run: alphaverdict backtest --config "${{ inputs.config-path }}"
+
+    - name: Extract verdict summary
+      id: verdict
+      if: ${{ always() }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CONFIG_PATH: ${{ inputs.config-path }}
+      run: |
+        set -euo pipefail
+        LATEST="$(python - <<'PY'
+        import json
+        from pathlib import Path
+
+        best = ("", None)
+        for manifest in Path("runs").glob("*/manifest.json"):
+            try:
+                payload = json.loads(manifest.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            run_id = str(payload.get("run_id", ""))
+            if run_id > best[0]:
+                best = (run_id, manifest.parent / "audit.json")
+        if best[1] is None:
+            raise SystemExit(1)
+        audit = json.loads(best[1].read_text(encoding="utf-8"))
+        print(f"{best[1]}|{audit.get('verdict', 'fail')}|{int(audit.get('score', 0))}")
+        PY
+        )"
+        AUDIT_PATH="${LATEST%%|*}"
+        VERDICT="$(echo "$LATEST" | cut -d'|' -f2)"
+        SCORE="$(echo "$LATEST" | cut -d'|' -f3)"
+        echo "audit_path=$AUDIT_PATH" >> "$GITHUB_OUTPUT"
+        echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
+        echo "score=$SCORE" >> "$GITHUB_OUTPUT"
+
+    - name: Post verdict comment
+      if: ${{ inputs.post-comment == 'true' && steps.verdict.outputs.audit_path != '' }}
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+      run: |
+        PR="${PR_NUMBER:-${{ github.event.pull_request.number }}}"
+        python "${{ github.action_path }}/.github/scripts/verdict_comment.py" \
+          --audit "${{ steps.verdict.outputs.audit_path }}" \
+          --config "${{ inputs.config-path }}" \
+          --repo "${{ github.repository }}" \
+          --pr "$PR" \
+          --post
