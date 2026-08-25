@@ -113,9 +113,7 @@ class FindingKnowledge:
         "BENCHMARK_MISSING": {
             "severity": "medium",
             "summary": "No point-in-time benchmark series was supplied.",
-            "remediation": (
-                "Configure a benchmark symbol present in user-owned prices."
-            ),
+            "remediation": ("Configure a benchmark symbol present in user-owned prices."),
         },
         "REGIME_INSTABILITY": {
             "severity": "medium",

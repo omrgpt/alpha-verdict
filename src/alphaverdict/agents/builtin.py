@@ -231,8 +231,12 @@ class CausalityAgent:
             self.name,
             f"Ran reproducibility and future-perturbation checks at {tested} cutoffs.",
             tuple(findings),
-            {"cutoffs": tested, "reproducible": reproducible, "prefix_stable": prefix_stable,
-             "warm_stable": warm_stable},
+            {
+                "cutoffs": tested,
+                "reproducible": reproducible,
+                "prefix_stable": prefix_stable,
+                "warm_stable": warm_stable,
+            },
         )
 
 
@@ -589,14 +593,16 @@ class TrialsAgent:
                     "do not trust any verdict that depends on this history.",
                 )
             )
-            return AgentReport(self.name, "Ledger integrity check failed.", tuple(findings),
-                               measurements)
+            return AgentReport(
+                self.name, "Ledger integrity check failed.", tuple(findings), measurements
+            )
 
         variants = ledger.trial_count()
         runs = ledger.run_count()
         names = ledger.variant_names()
-        measurements.update({"distinct_variants": variants, "recorded_runs": runs,
-                             "variants": names})
+        measurements.update(
+            {"distinct_variants": variants, "recorded_runs": runs, "variants": names}
+        )
         declared = context.config.n_trials
         if variants > declared:
             findings.append(

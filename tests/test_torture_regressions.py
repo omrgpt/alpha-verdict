@@ -116,6 +116,7 @@ def test_report_escapes_hostile_strings(tmp_path: Path) -> None:
 
 def test_causality_agent_reports_warmup_stability() -> None:
     """The stale-warmup probe runs and reports honest strategies as stable."""
+
     class Momentum(StockStrategy):
         name = "warm-momentum"
         description = ""
@@ -130,15 +131,26 @@ def test_causality_agent_reports_warmup_stability() -> None:
                 hist = snapshot.prices[snapshot.prices["symbol"] == sym]
                 closes = hist.sort_values("timestamp")["close"]
                 if len(closes) >= self.minimum_history:
-                    rows.append({"symbol": sym, "score": float(closes.iloc[-1]),
-                                 "eligible": True, "rationale": ""})
+                    rows.append(
+                        {
+                            "symbol": sym,
+                            "score": float(closes.iloc[-1]),
+                            "eligible": True,
+                            "rationale": "",
+                        }
+                    )
             return pd.DataFrame(rows)
 
     bundle = DataBundle(prices=_prices(days=80), metadata=META)
     engine = BacktestEngine(BacktestConfig(rebalance=RebalanceFrequency.WEEKLY, top_k=2))
     result = engine.run(bundle, Momentum())
-    config = AuditConfig(bootstrap_simulations=100, permutation_simulations=100,
-                         causality_cutoffs=3, stability_folds=2, seed=11)
+    config = AuditConfig(
+        bootstrap_simulations=100,
+        permutation_simulations=100,
+        causality_cutoffs=3,
+        stability_folds=2,
+        seed=11,
+    )
     context = AuditContext(bundle, Momentum(), engine, result, config)
     report = CausalityAgent().review(context)
     assert report.measurements["warm_stable"] is True

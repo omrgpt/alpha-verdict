@@ -33,8 +33,13 @@ def _context(ledger_path: Path | None, n_trials: int = 1):
     bundle = synthetic_bundle(seed=11, sessions=180)
     strategy = DemoEvidenceStrategy(momentum_sessions=30)
     engine = BacktestEngine(
-        BacktestConfig(rebalance=RebalanceFrequency.WEEKLY, top_k=3, max_weight=0.40,
-                       benchmark_symbol="DEMO-BENCH", seed=11)
+        BacktestConfig(
+            rebalance=RebalanceFrequency.WEEKLY,
+            top_k=3,
+            max_weight=0.40,
+            benchmark_symbol="DEMO-BENCH",
+            seed=11,
+        )
     )
     result = engine.run(bundle, strategy)
     config = AuditConfig(
@@ -61,8 +66,16 @@ def test_trials_agent_flags_missing_ledger(tmp_path: Path) -> None:
 def test_trials_agent_accepts_matching_burden(tmp_path: Path) -> None:
     path = tmp_path / "trials.jsonl"
     ledger = TrialLedger(path)
-    stub = type("S", (), {"manifest": {}, "strategy_name": "s", "strategy_fingerprint": "fp-1",
-                          "data_fingerprint": "d"})()
+    stub = type(
+        "S",
+        (),
+        {
+            "manifest": {},
+            "strategy_name": "s",
+            "strategy_fingerprint": "fp-1",
+            "data_fingerprint": "d",
+        },
+    )()
     ledger.record_result(stub)
     context = _context(path, n_trials=1)
     report = TrialsAgent(ledger_path=str(path)).review(context)
@@ -76,9 +89,16 @@ def test_trials_agent_flags_underdeclaration(tmp_path: Path) -> None:
     path = tmp_path / "trials.jsonl"
     ledger = TrialLedger(path)
     for fingerprint in ("fp-1", "fp-2", "fp-3"):
-        stub = type("S", (), {"manifest": {}, "strategy_name": fingerprint,
-                              "strategy_fingerprint": fingerprint,
-                              "data_fingerprint": "d"})()
+        stub = type(
+            "S",
+            (),
+            {
+                "manifest": {},
+                "strategy_name": fingerprint,
+                "strategy_fingerprint": fingerprint,
+                "data_fingerprint": "d",
+            },
+        )()
         ledger.record_result(stub)
     context = _context(path, n_trials=1)
     report = TrialsAgent(ledger_path=str(path)).review(context)

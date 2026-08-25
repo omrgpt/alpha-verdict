@@ -95,8 +95,14 @@ class _Momentum(_Base):
             hist = snapshot.prices[snapshot.prices["symbol"] == sym]
             closes = hist.sort_values("timestamp")["close"]
             if len(closes) >= self.minimum_history:
-                rows.append({"symbol": sym, "score": float(closes.iloc[-1] / closes.iloc[0] - 1),
-                             "eligible": True, "rationale": "trail return"})
+                rows.append(
+                    {
+                        "symbol": sym,
+                        "score": float(closes.iloc[-1] / closes.iloc[0] - 1),
+                        "eligible": True,
+                        "rationale": "trail return",
+                    }
+                )
         return pd.DataFrame(rows, columns=["symbol", "score", "eligible", "rationale"])
 
 
@@ -118,8 +124,14 @@ class _LookaheadMetadata(_Base):
             closes = hist.sort_values("timestamp")["close"]
             if len(closes) >= self.minimum_history:
                 implied = float(closes.iloc[-1]) * (1 + smuggled)
-                rows.append({"symbol": sym, "score": -abs(float(closes.iloc[-1]) - implied),
-                             "eligible": True, "rationale": "distance to full-sample drift"})
+                rows.append(
+                    {
+                        "symbol": sym,
+                        "score": -abs(float(closes.iloc[-1]) - implied),
+                        "eligible": True,
+                        "rationale": "distance to full-sample drift",
+                    }
+                )
         return pd.DataFrame(rows, columns=["symbol", "score", "eligible", "rationale"])
 
 
@@ -130,8 +142,12 @@ class _Nondeterministic(_Base):
         rng = np.random.default_rng()
         return pd.DataFrame(
             [
-                {"symbol": sym, "score": float(rng.normal()), "eligible": True,
-                 "rationale": "noise"}
+                {
+                    "symbol": sym,
+                    "score": float(rng.normal()),
+                    "eligible": True,
+                    "rationale": "noise",
+                }
                 for sym in snapshot.universe
             ],
             columns=["symbol", "score", "eligible", "rationale"],
@@ -162,9 +178,14 @@ class _FrozenWarmup(_Base):
             hist = snapshot.prices[snapshot.prices["symbol"] == sym]
             closes = hist.sort_values("timestamp")["close"]
             if len(closes) >= self.minimum_history:
-                rows.append({"symbol": sym,
-                             "score": -abs(float(closes.iloc[-1]) - self._frozen_mean),
-                             "eligible": True, "rationale": "frozen-mean distance"})
+                rows.append(
+                    {
+                        "symbol": sym,
+                        "score": -abs(float(closes.iloc[-1]) - self._frozen_mean),
+                        "eligible": True,
+                        "rationale": "frozen-mean distance",
+                    }
+                )
         return pd.DataFrame(rows, columns=["symbol", "score", "eligible", "rationale"])
 
 
@@ -189,16 +210,23 @@ class _Churner(_Base):
             closes = hist.sort_values("timestamp")["close"]
             if len(closes) >= self.minimum_history:
                 base = float(closes.pct_change().tail(20).std()) + 1e-9
-                rows.append({"symbol": sym, "score": base * (1 + float(self._rng.normal(0, 0.05))),
-                             "eligible": True, "rationale": "churn"})
+                rows.append(
+                    {
+                        "symbol": sym,
+                        "score": base * (1 + float(self._rng.normal(0, 0.05))),
+                        "eligible": True,
+                        "rationale": "churn",
+                    }
+                )
         return pd.DataFrame(rows, columns=["symbol", "score", "eligible", "rationale"])
 
 
 # ------------------------------------------------------------------- cases
 
 
-def _council_context(bundle: DataBundle, strategy: StockStrategy, engine: BacktestEngine,
-                     **config_kw: Any) -> AuditContext:
+def _council_context(
+    bundle: DataBundle, strategy: StockStrategy, engine: BacktestEngine, **config_kw: Any
+) -> AuditContext:
     result = engine.run(bundle, strategy)
     settings: dict[str, Any] = {
         "bootstrap_simulations": 100,
@@ -209,8 +237,13 @@ def _council_context(bundle: DataBundle, strategy: StockStrategy, engine: Backte
         "seed": 11,
     }
     settings.update(config_kw)
-    return AuditContext(bundle=bundle, strategy=strategy, engine=engine, result=result,
-                        config=AuditConfig(**settings))
+    return AuditContext(
+        bundle=bundle,
+        strategy=strategy,
+        engine=engine,
+        result=result,
+        config=AuditConfig(**settings),
+    )
 
 
 def case_lookahead_metadata() -> tuple[bool, str]:
@@ -258,12 +291,19 @@ def case_impossible_prices() -> tuple[bool, str]:
 
 def case_temporal_leak_features() -> tuple[bool, str]:
     base = _bundle(_prices(days=60))
-    features = pd.DataFrame([
-        {"symbol": "AAA", "feature": "eps", "value": 2.0,
-         "observed_at": pd.Timestamp("2024-02-15", tz="UTC"),
-         "available_at": pd.Timestamp("2024-02-01", tz="UTC"),
-         "revision": 0, "source": "zoo"},
-    ])
+    features = pd.DataFrame(
+        [
+            {
+                "symbol": "AAA",
+                "feature": "eps",
+                "value": 2.0,
+                "observed_at": pd.Timestamp("2024-02-15", tz="UTC"),
+                "available_at": pd.Timestamp("2024-02-01", tz="UTC"),
+                "revision": 0,
+                "source": "zoo",
+            },
+        ]
+    )
     leaked = DataBundle(prices=base.prices, features=features, metadata=_clean_metadata())
     engine = _engine()
     context = _council_context(leaked, _Momentum(), engine, causality_cutoffs=2)
@@ -273,8 +313,7 @@ def case_temporal_leak_features() -> tuple[bool, str]:
 
 
 def case_survivorship_undisclosed() -> tuple[bool, str]:
-    bundle = _bundle(_prices(days=60),
-                     metadata={"price_adjustment": "split_and_dividend_adjusted"})
+    bundle = _bundle(_prices(days=60), metadata={"price_adjustment": "split_and_dividend_adjusted"})
     engine = _engine()
     context = _council_context(bundle, _Momentum(), engine, causality_cutoffs=2)
     report = DataIntegrityAgent().review(context)
@@ -286,8 +325,9 @@ def case_cost_fragile_turnover() -> tuple[bool, str]:
     frame = _prices(symbols=("AAA", "BBB", "CCC", "DDD"), days=240, seed=23, drift=0.0009)
     bundle = _bundle(frame)
     engine = BacktestEngine(
-        BacktestConfig(rebalance=RebalanceFrequency.DAILY, top_k=2, commission_bps=25.0,
-                       slippage_bps=50.0)
+        BacktestConfig(
+            rebalance=RebalanceFrequency.DAILY, top_k=2, commission_bps=25.0, slippage_bps=50.0
+        )
     )
     result = engine.run(bundle, _Churner())
     from alphaverdict.agents.council import AuditCouncil  # noqa: PLC0415 - avoids import cycle
@@ -296,8 +336,13 @@ def case_cost_fragile_turnover() -> tuple[bool, str]:
     robustness = next(a for a in council_agents() if a.name == "robustness")
     performance = next(a for a in council_agents() if a.name == "performance")
     object.__setattr__(council, "agents", (robustness, performance))
-    audit_config = AuditConfig(cost_multipliers=(0.0, 1.0, 2.0), bootstrap_simulations=100,
-                               permutation_simulations=100, stability_folds=4, seed=11)
+    audit_config = AuditConfig(
+        cost_multipliers=(0.0, 1.0, 2.0),
+        bootstrap_simulations=100,
+        permutation_simulations=100,
+        stability_folds=4,
+        seed=11,
+    )
     audit = council.review(bundle, _Churner(), engine, result, audit_config)
     codes = {f.code for f in audit.findings}
     ok = bool(codes & {"COST_FRAGILE", "FOLD_INSTABILITY"})

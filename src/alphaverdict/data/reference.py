@@ -204,7 +204,11 @@ class YFinanceBundleAdapter:
         cache_file = self._cache_path(self._cache_key(wanted))
         if cache_file is not None and self._cache_fresh(cache_file):
             with contextlib.suppress(Exception):
-                cached = pd.read_pickle(cache_file)  # noqa: S301 - trusted local cache
+                # Trusted-local deserialization: the pickle is written only by
+                # this adapter into the user's own cache directory, keyed by a
+                # hash of the request. An attacker able to write there already
+                # controls the Python environment itself.
+                cached = pd.read_pickle(cache_file)  # noqa: S301 - trusted local cache  # nosec B301
                 if isinstance(cached, pd.DataFrame) and not cached.empty:
                     return cached
         module = _require_yfinance()

@@ -66,9 +66,7 @@ def _write_head(path: Path, count: int, last_hash: str) -> None:
 
 def _read_head(path: Path) -> dict[str, Any] | None:
     try:
-        parsed = json.loads(
-            path.with_name(path.name + HEAD_SUFFIX).read_text(encoding="utf-8")
-        )
+        parsed = json.loads(path.with_name(path.name + HEAD_SUFFIX).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
     if not isinstance(parsed, dict):
@@ -163,11 +161,7 @@ class TrialLedger:
         return max(len(fingerprints), 1)
 
     def run_count(self) -> int:
-        return sum(
-            1
-            for item in self.entries()
-            if item.kind in {"backtest", "demo"}
-        )
+        return sum(1 for item in self.entries() if item.kind in {"backtest", "demo"})
 
     def variant_names(self) -> list[str]:
         seen: dict[str, str] = {}
@@ -188,11 +182,11 @@ class TrialLedger:
         """
         previous = GENESIS
         entries = self.entries()
-        raw_lines = [
-            line
-            for line in self.path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ] if self.path.is_file() else []
+        raw_lines = (
+            [line for line in self.path.read_text(encoding="utf-8").splitlines() if line.strip()]
+            if self.path.is_file()
+            else []
+        )
         if len(entries) != len(raw_lines):
             return False, len(entries)  # corrupt/unparseable line present
         for position, item in enumerate(entries):
