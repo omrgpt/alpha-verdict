@@ -10,7 +10,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from jinja2 import Environment, PackageLoader, select_autoescape
+from jinja2 import Environment, PackageLoader
 
 from alphaverdict.audit.models import AuditReport
 from alphaverdict.engine.models import BacktestResult, ScreenResult
@@ -114,7 +114,9 @@ def write_run_report(
 
     environment = Environment(
         loader=PackageLoader("alphaverdict", "templates"),
-        autoescape=select_autoescape(("html", "xml")),
+        # Explicit autoescape: select_autoescape keys on the template's final
+        # extension (.j2), which silently disables escaping for report.html.j2.
+        autoescape=True,
         enable_async=False,
     )
     template = environment.get_template("report.html.j2")

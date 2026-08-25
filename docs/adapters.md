@@ -33,6 +33,23 @@ CSV and Parquet are supported. Event payloads inside CSV must be JSON objects en
 as strings. The adapter accepts local paths only and confines them to the project
 root unless `allow_outside_root: true` is explicitly set.
 
+## Reference public-data adapter
+
+An optional adapter (`pip install "alphaverdict[real]"`) downloads daily OHLCV from
+Yahoo Finance public endpoints into the canonical contract. It powers
+`alphaverdict demo --real` and is an adoption on-ramp, not a curated research feed:
+the universe is a current-listing snapshot, so the data-integrity reviewer will
+flag the survivorship limitation on every run — by design.
+
+```yaml
+data:
+  adapter: yfinance
+  options:
+    symbols: [AAPL, MSFT, NVDA]
+    benchmark: SPY
+    period: 5y
+```
+
 ## A private provider adapter
 
 Keep provider imports and credentials in your own package:

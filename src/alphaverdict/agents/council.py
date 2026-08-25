@@ -11,6 +11,7 @@ from alphaverdict.agents.builtin import (
     PerformanceAgent,
     RobustnessAgent,
     StatisticalAgent,
+    TrialsAgent,
 )
 from alphaverdict.audit.models import AuditConfig, AuditReport, Severity, Verdict
 from alphaverdict.audit.recommendations import recommendations_for
@@ -23,13 +24,19 @@ from alphaverdict.strategy.base import StockStrategy
 class AuditCouncil:
     """Run independent read-only reviewers and merge evidence deterministically."""
 
-    def __init__(self, agents: tuple[ReviewAgent, ...] | None = None) -> None:
+    def __init__(
+        self,
+        agents: tuple[ReviewAgent, ...] | None = None,
+        *,
+        trials_ledger_path: str | None = None,
+    ) -> None:
         self.agents = agents or (
             DataIntegrityAgent(),
             CausalityAgent(),
             PerformanceAgent(),
             RobustnessAgent(),
             StatisticalAgent(),
+            TrialsAgent(ledger_path=trials_ledger_path),
         )
 
     def review(

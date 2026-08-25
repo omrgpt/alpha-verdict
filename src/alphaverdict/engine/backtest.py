@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -22,6 +22,23 @@ from alphaverdict.strategy.context import ResearchSnapshot
 from alphaverdict.utils import canonical_json, sha256_text
 
 
+@dataclass(frozen=True)
+class ReplayPlan:
+    """Cost-independent research state computed once per bundle and strategy.
+
+    Screens, selections, holdings, and period gross returns never depend on
+    commission or slippage assumptions, so the expensive snapshot work happens
+    exactly once and every cost variant replays in pure arithmetic.
+    """
+
+    config: BacktestConfig
+    strategy_name: str
+    strategy_fingerprint: str
+    data_fingerprint: str
+    periods: tuple[dict[str, Any], ...] = field(default_factory=tuple)
+    warnings: frozenset[str] = field(default_factory=frozenset)
+
+
 class BacktestEngine:
     """Evaluate rankings as hypothetical long-only portfolios; never place orders."""
 
@@ -29,6 +46,11 @@ class BacktestEngine:
         self.config = config or BacktestConfig()
 
     def run(self, bundle: DataBundle, strategy: StockStrategy) -> BacktestResult:
+        """Prepare cost-independent state once, then replay at configured costs."""
+        return self.replay(self.prepare(bundle, strategy))
+
+    def prepare(self, bundle: DataBundle, strategy: StockStrategy) -> ReplayPlan:
+        """Run every snapshot, screen, and selection exactly once."""
         if bundle.prices.empty:
             raise InsufficientDataError("backtesting requires canonical daily prices")
         price_opens = open_matrix(bundle.prices)
@@ -43,14 +65,11 @@ class BacktestEngine:
         if len(schedule) < 2:
             raise InsufficientDataError("backtest needs at least two executable rebalance periods")
 
-        previous: dict[str, float] = {}
-        return_rows: list[dict[str, Any]] = []
-        holding_rows: list[dict[str, Any]] = []
-        signal_rows: list[dict[str, Any]] = []
         warnings: set[str] = {
             "Results are research simulations, not investment advice or execution instructions.",
             "Signals are formed after a decision close and applied at the following session open.",
         }
+        periods: list[dict[str, Any]] = []
 
         for index in range(len(schedule) - 1):
             decision, execution = schedule[index]
@@ -58,16 +77,16 @@ class BacktestEngine:
             snapshot = ResearchSnapshot.from_bundle(bundle, decision)
             signals = strategy.screen(snapshot)
             selected = signals.top(self.config.top_k, minimum_score=self.config.minimum_score)
-            for row in selected.itertuples(index=False):
-                signal_rows.append(
-                    {
-                        "decision_at": decision,
-                        "symbol": row.symbol,
-                        "score": float(row.score),
-                        "eligible": bool(row.eligible),
-                        "rationale": row.rationale,
-                    }
-                )
+            signal_rows = [
+                {
+                    "decision_at": decision,
+                    "symbol": row.symbol,
+                    "score": float(row.score),
+                    "eligible": bool(row.eligible),
+                    "rationale": row.rationale,
+                }
+                for row in selected.itertuples(index=False)
+            ]
             weights = self._weights(selected)
             valid = self._valid_returns(price_opens, weights, execution, next_execution)
             dropped = set(weights) - set(valid)
@@ -75,72 +94,127 @@ class BacktestEngine:
                 warnings.add(
                     "Some selected stocks lacked valid execution prices and were left in cash."
                 )
-            weights = {symbol: weights[symbol] for symbol in valid}
-            gross = sum(weights[symbol] * valid[symbol] for symbol in weights)
-            turnover = portfolio_turnover(previous, weights)
-            cost = friction(turnover, self.config.total_cost_bps)
-            net = gross - cost
-            benchmark_return = self._benchmark_return(price_opens, execution, next_execution)
-            return_rows.append(
+            effective = {symbol: weights[symbol] for symbol in valid}
+            gross = sum(effective[symbol] * valid[symbol] for symbol in effective)
+            periods.append(
                 {
-                    "timestamp": next_execution,
                     "decision_at": decision,
                     "execution_at": execution,
+                    "exit_at": next_execution,
                     "gross_return": gross,
-                    "cost": cost,
-                    "strategy_return": net,
-                    "benchmark_return": benchmark_return,
-                    "turnover": turnover,
-                    "gross_exposure": sum(weights.values()),
-                    "holdings_count": len(weights),
+                    "benchmark_return": self._benchmark_return(
+                        price_opens, execution, next_execution
+                    ),
+                    "weights": effective,
+                    "returns_by_symbol": valid,
+                    "gross_exposure": sum(effective.values()),
+                    "holdings_count": len(effective),
+                    "signal_rows": signal_rows,
+                    "scores": selected.set_index("symbol")["score"].to_dict(),
                 }
             )
-            score_by_symbol = selected.set_index("symbol")["score"].to_dict()
+
+        return ReplayPlan(
+            config=self.config,
+            strategy_name=strategy.name,
+            strategy_fingerprint=strategy.fingerprint(),
+            data_fingerprint=bundle.fingerprint(),
+            periods=tuple(periods),
+            warnings=frozenset(warnings),
+        )
+
+    def replay(
+        self,
+        plan: ReplayPlan,
+        *,
+        commission_bps: float | None = None,
+        slippage_bps: float | None = None,
+    ) -> BacktestResult:
+        """Rebuild full results from a prepared plan under one cost assumption."""
+        config = self.config
+        if commission_bps is not None or slippage_bps is not None:
+            config = replace(
+                plan.config,
+                commission_bps=plan.config.commission_bps
+                if commission_bps is None
+                else commission_bps,
+                slippage_bps=plan.config.slippage_bps if slippage_bps is None else slippage_bps,
+            )
+        total_cost_bps = config.commission_bps + config.slippage_bps
+
+        return_rows: list[dict[str, Any]] = []
+        holding_rows: list[dict[str, Any]] = []
+        signal_rows: list[dict[str, Any]] = []
+        previous: dict[str, float] = {}
+
+        for period in plan.periods:
+            weights: dict[str, float] = period["weights"]
+            valid: dict[str, float] = period["returns_by_symbol"]
+            turnover = portfolio_turnover(previous, weights)
+            cost = friction(turnover, total_cost_bps)
+            net = period["gross_return"] - cost
+            execution = period["execution_at"]
+            return_rows.append(
+                {
+                    "timestamp": period["exit_at"],
+                    "decision_at": period["decision_at"],
+                    "execution_at": execution,
+                    "gross_return": period["gross_return"],
+                    "cost": cost,
+                    "strategy_return": net,
+                    "benchmark_return": period["benchmark_return"],
+                    "turnover": turnover,
+                    "gross_exposure": period["gross_exposure"],
+                    "holdings_count": period["holdings_count"],
+                }
+            )
+            scores: dict[str, float] = period["scores"]
             for symbol, weight in weights.items():
                 holding_rows.append(
                     {
                         "execution_at": execution,
-                        "exit_at": next_execution,
+                        "exit_at": period["exit_at"],
                         "symbol": symbol,
                         "weight": weight,
-                        "score": float(score_by_symbol[symbol]),
+                        "score": float(scores[symbol]),
                         "period_return": valid[symbol],
                     }
                 )
+            signal_rows.extend(period["signal_rows"])
             previous = self._drifted_weights(weights, valid)
 
         returns = pd.DataFrame(return_rows).set_index("timestamp").sort_index()
-        strategy_equity = self.config.initial_capital * (1 + returns["strategy_return"]).cumprod()
+        strategy_equity = config.initial_capital * (1 + returns["strategy_return"]).cumprod()
         benchmark_equity = (
-            self.config.initial_capital * (1 + returns["benchmark_return"].fillna(0)).cumprod()
+            config.initial_capital * (1 + returns["benchmark_return"].fillna(0)).cumprod()
         )
         equity = pd.DataFrame({"strategy": strategy_equity, "benchmark": benchmark_equity})
         metrics = calculate_metrics(
             returns["strategy_return"],
-            periods_per_year=self.config.periods_per_year,
-            annual_risk_free_rate=self.config.annual_risk_free_rate,
+            periods_per_year=config.periods_per_year,
+            annual_risk_free_rate=config.annual_risk_free_rate,
             benchmark=returns["benchmark_return"],
             turnover=returns["turnover"],
             exposure=returns["gross_exposure"],
         )
         benchmark_metrics = calculate_metrics(
             returns["benchmark_return"],
-            periods_per_year=self.config.periods_per_year,
-            annual_risk_free_rate=self.config.annual_risk_free_rate,
+            periods_per_year=config.periods_per_year,
+            annual_risk_free_rate=config.annual_risk_free_rate,
         )
-        manifest = self._manifest(bundle, strategy, returns)
+        manifest = self._manifest(config, plan, returns)
         return BacktestResult(
-            config=self.config,
-            strategy_name=strategy.name,
-            strategy_fingerprint=strategy.fingerprint(),
-            data_fingerprint=bundle.fingerprint(),
+            config=config,
+            strategy_name=plan.strategy_name,
+            strategy_fingerprint=plan.strategy_fingerprint,
+            data_fingerprint=plan.data_fingerprint,
             returns=returns,
             equity=equity,
             holdings=pd.DataFrame(holding_rows),
             signals=pd.DataFrame(signal_rows),
             metrics=metrics,
             benchmark_metrics=benchmark_metrics,
-            warnings=tuple(sorted(warnings)),
+            warnings=tuple(sorted(plan.warnings)),
             manifest=manifest,
         )
 
@@ -221,24 +295,24 @@ class BacktestEngine:
         return float(exit_price / entry - 1)
 
     def _manifest(
-        self, bundle: DataBundle, strategy: StockStrategy, returns: pd.DataFrame
+        self, config: BacktestConfig, plan: ReplayPlan, returns: pd.DataFrame
     ) -> dict[str, Any]:
         config_payload = {
-            "rebalance": self.config.rebalance.value,
-            "top_k": self.config.top_k,
-            "minimum_score": self.config.minimum_score,
-            "weighting": self.config.weighting.value,
-            "max_weight": self.config.max_weight,
-            "commission_bps": self.config.commission_bps,
-            "slippage_bps": self.config.slippage_bps,
-            "benchmark_symbol": self.config.benchmark_symbol,
-            "seed": self.config.seed,
+            "rebalance": config.rebalance.value,
+            "top_k": config.top_k,
+            "minimum_score": config.minimum_score,
+            "weighting": config.weighting.value,
+            "max_weight": config.max_weight,
+            "commission_bps": config.commission_bps,
+            "slippage_bps": config.slippage_bps,
+            "benchmark_symbol": config.benchmark_symbol,
+            "seed": config.seed,
         }
         content = {
             "schema_version": "1",
             "alphaverdict_version": __version__,
-            "data_fingerprint": bundle.fingerprint(),
-            "strategy_fingerprint": strategy.fingerprint(),
+            "data_fingerprint": plan.data_fingerprint,
+            "strategy_fingerprint": plan.strategy_fingerprint,
             "config_fingerprint": sha256_text(canonical_json(config_payload)),
             "periods": len(returns),
             "result_fingerprint": sha256_text(

@@ -55,3 +55,12 @@ secrets*.json
 # Keep small, explicitly documented fixtures
 !examples/**/data/
 !tests/fixtures/
+
+_asset-runs/
+smoke-runs/
+
+
+# Local torture-test scratch
+trials.jsonl*
+_torture-report/
+torture/

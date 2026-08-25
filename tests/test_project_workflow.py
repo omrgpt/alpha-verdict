@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from alphaverdict import __version__, cli
+import alphaverdict.demo as demo_module
+from alphaverdict import __version__
 from alphaverdict.audit.models import AuditReport, Verdict
 from alphaverdict.cli import app
 from alphaverdict.config.reader import load_project
@@ -66,7 +67,18 @@ def test_scaffold_creates_reviewable_project_and_refuses_overwrite(tmp_path: Pat
 
 def test_package_versions_cannot_drift() -> None:
     project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-    assert project["project"]["version"] == __version__
+    assert "version" in project["project"]["dynamic"]
+    hatch_version = project["tool"]["hatch"]["version"]
+    assert hatch_version["path"] == "src/alphaverdict/_version.py"
+    assert __version__ == hatch_version_source()
+
+
+def hatch_version_source() -> str:
+    text = Path("src/alphaverdict/_version.py").read_text(encoding="utf-8")
+    for line in text.splitlines():
+        if line.startswith("__version__"):
+            return line.split("=", 1)[1].strip().strip('"').strip("'")
+    raise AssertionError("_version.py does not define __version__")
 
 
 def test_config_loads_strict_runtime(demo_bundle, tmp_path: Path) -> None:
@@ -158,8 +170,12 @@ def test_cli_version_init_validate_and_screen(demo_bundle, tmp_path: Path) -> No
 
 
 def test_cli_demo_uses_synthetic_warning(monkeypatch, tmp_path: Path) -> None:
-    original = cli.synthetic_bundle
-    monkeypatch.setattr(cli, "synthetic_bundle", lambda seed: original(seed=seed, sessions=130))
+    original = demo_module.synthetic_bundle
+    monkeypatch.setattr(
+        demo_module,
+        "synthetic_bundle",
+        lambda seed, sessions=520: original(seed=seed, sessions=130),
+    )
     result = CliRunner().invoke(app, ["demo", "--output", str(tmp_path), "--seed", "5"])
     assert result.exit_code == 0
     assert "Synthetic demo only" in result.output

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -143,6 +144,7 @@ class CausalityAgent:
         tested = 0
         reproducible = True
         prefix_stable = True
+        warm_stable = True
         if len(candidates):
             positions = np.linspace(
                 0,
@@ -163,6 +165,18 @@ class CausalityAgent:
                 changed = context.strategy.clone().screen(perturbed).comparable()
                 if not _same_signals(first, changed):
                     prefix_stable = False
+                # Stale-warmup probe: a clone that already screened an earlier
+                # snapshot must produce identical output here. Strategies that
+                # freeze global state on first use fail this probe.
+                earlier_position = max(0, position - 2)
+                earlier = pd.Timestamp(candidates[earlier_position])
+                warner = context.strategy.clone()
+                _ = warner.screen(
+                    ResearchSnapshot.from_bundle(context.bundle, earlier)
+                ).comparable()
+                warmed = warner.screen(original).comparable()
+                if not _same_signals(first, warmed):
+                    warm_stable = False
                 tested += 1
         if not reproducible:
             findings.append(
@@ -186,6 +200,22 @@ class CausalityAgent:
                     "Remove full-sample transforms, backward fills, and future-dependent global state.",
                 )
             )
+        if not warm_stable:
+            findings.append(
+                _finding(
+                    self.name,
+                    "STRATEGY_STATEFUL_WARMUP",
+                    Severity.HIGH,
+                    "Strategy output depends on evaluation order",
+                    (
+                        "A clone that screened an earlier snapshot produced different signals "
+                        "at the same cutoff; frozen cross-decision state (lazy caches, "
+                        "'first-call' globals) leaks between decisions."
+                    ),
+                    "Derive every score from the snapshot alone; reset or remove cached state "
+                    "in screen(), never reuse statistics warmed on earlier data.",
+                )
+            )
         if tested == 0:
             findings.append(
                 _finding(
@@ -201,7 +231,12 @@ class CausalityAgent:
             self.name,
             f"Ran reproducibility and future-perturbation checks at {tested} cutoffs.",
             tuple(findings),
-            {"cutoffs": tested, "reproducible": reproducible, "prefix_stable": prefix_stable},
+            {
+                "cutoffs": tested,
+                "reproducible": reproducible,
+                "prefix_stable": prefix_stable,
+                "warm_stable": warm_stable,
+            },
         )
 
 
@@ -248,9 +283,14 @@ class RobustnessAgent:
                 )
             )
         cost_curve: dict[str, float] = {}
+        plan = context.engine.prepare(context.bundle, context.strategy.clone())
+        base_commission = context.engine.config.commission_bps
+        base_slippage = context.engine.config.slippage_bps
         for multiplier in context.config.cost_multipliers:
-            stressed = context.engine.with_cost_multiplier(multiplier).run(
-                context.bundle, context.strategy.clone()
+            stressed = context.engine.replay(
+                plan,
+                commission_bps=base_commission * multiplier,
+                slippage_bps=base_slippage * multiplier,
             )
             cost_curve[f"{multiplier:g}x"] = float(stressed.metrics.get("total_return", 0.0) or 0.0)
         base = cost_curve.get("1x", float(context.result.metrics.get("total_return", 0.0) or 0.0))
@@ -503,6 +543,108 @@ class StatisticalAgent:
         )
 
 
+class TrialsAgent:
+    """Reconcile the declared search burden against the recorded trial ledger.
+
+    Deflated Sharpe is only as honest as its ``n_trials`` input. This reviewer
+    reads the project's hash-chained trial ledger — the automatic record of
+    every variant actually run — and flags understated burdens, silent
+    history, and tampered chains, so the multiple-testing penalty reflects
+    evidence instead of self-report.
+    """
+
+    name = "trials"
+
+    def __init__(self, ledger_path: str | None = None) -> None:
+        self.ledger_path = ledger_path
+
+    def review(self, context: AuditContext) -> AgentReport:
+        findings: list[Finding] = []
+        from alphaverdict.audit.ledger import TrialLedger  # noqa: PLC0415 - avoids import cycle
+
+        path = Path(self.ledger_path) if self.ledger_path else _default_ledger_path()
+        measurements: dict[str, Any] = {"ledger_path": str(path)}
+        if not path.is_file():
+            findings.append(
+                _finding(
+                    self.name,
+                    "TRIALS_LEDGER_MISSING",
+                    Severity.MEDIUM,
+                    "No research diary records what was attempted",
+                    f"No trial ledger exists at {path}; every run should append itself there.",
+                    "Run `alphaverdict backtest` (auto-ledger) or `alphaverdict ledger note` "
+                    "to start one; undeclared searches overstate confidence.",
+                )
+            )
+            return AgentReport(self.name, "No trial ledger found.", tuple(findings), measurements)
+
+        ledger = TrialLedger(path)
+        intact, bad_index = ledger.verify()
+        measurements["chain_intact"] = intact
+        if not intact:
+            findings.append(
+                _finding(
+                    self.name,
+                    "TRIALS_LEDGER_TAMPERED",
+                    Severity.CRITICAL,
+                    "Trial ledger chain failed verification",
+                    f"Hash chain broken at entry index {bad_index}; history was edited or truncated.",
+                    "Restore the ledger from backup or restart it with a written note; "
+                    "do not trust any verdict that depends on this history.",
+                )
+            )
+            return AgentReport(
+                self.name, "Ledger integrity check failed.", tuple(findings), measurements
+            )
+
+        variants = ledger.trial_count()
+        runs = ledger.run_count()
+        names = ledger.variant_names()
+        measurements.update(
+            {"distinct_variants": variants, "recorded_runs": runs, "variants": names}
+        )
+        declared = context.config.n_trials
+        if variants > declared:
+            findings.append(
+                _finding(
+                    self.name,
+                    "TRIALS_UNDERDECLARED",
+                    Severity.HIGH,
+                    "Recorded search exceeds the declared trial burden",
+                    f"Ledger shows {variants} distinct strategy variants across {runs} runs; "
+                    f"audit config declares n_trials={declared}.",
+                    "Raise audit.n_trials to the recorded count and re-read the deflated "
+                    "Sharpe probability against the honest burden.",
+                    recorded_variants=variants,
+                    declared_n_trials=declared,
+                )
+            )
+        elif variants < declared and runs > 0:
+            findings.append(
+                _finding(
+                    self.name,
+                    "TRIALS_OVERDECLARED",
+                    Severity.INFO,
+                    "Declared burden exceeds recorded trials",
+                    f"n_trials={declared} but only {variants} distinct variants appear in the "
+                    "ledger (unrecorded work elsewhere is possible).",
+                    "If variants were tried outside this project, add a ledger note "
+                    "describing them so the record matches reality.",
+                )
+            )
+        return AgentReport(
+            self.name,
+            f"Verified {runs} chained runs across {variants} distinct variants "
+            f"against declared n_trials={declared}.",
+            tuple(findings),
+            measurements,
+        )
+
+
+def _default_ledger_path() -> Path:
+    return Path.cwd() / "trials.jsonl"
+
+
 def _same_signals(first: pd.DataFrame, second: pd.DataFrame) -> bool:
     try:
         pd.testing.assert_frame_equal(first, second, check_exact=True)
@@ -530,4 +672,31 @@ def _perturb_future(bundle: DataBundle, cutoff: pd.Timestamp) -> DataBundle:
     future_events = events["available_at"] > cutoff
     for index in events.index[future_events]:
         events.at[index, "payload"] = {"future_corrupted": True}
-    return DataBundle(prices, features, events, bundle.universe, bundle.metadata)
+    # Bundle metadata is NOT temporally governed, so strategies must never derive
+    # scores from it. Corrupting it here enforces that rule mechanically: any
+    # strategy whose signals move with metadata values is leaking non-point-in-time
+    # state and deserves the prefix-changed finding.
+    return DataBundle(
+        prices,
+        features,
+        events,
+        bundle.universe,
+        _corrupt_metadata(bundle.metadata),
+    )
+
+
+def _corrupt_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    def corrupt(value: Any) -> Any:
+        if isinstance(value, bool):
+            return not value
+        if isinstance(value, (int, float)):
+            return float(value) * -7.0
+        if isinstance(value, str):
+            return f"{value}-future-corrupted"
+        if isinstance(value, dict):
+            return {key: corrupt(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [corrupt(item) for item in value]
+        return value
+
+    return {key: corrupt(item) for key, item in metadata.items()}

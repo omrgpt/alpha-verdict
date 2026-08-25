@@ -1,14 +1,24 @@
-"""Deterministic synthetic demo used to prove the pipeline, never a market edge."""
+"""Deterministic demos used to prove the pipeline, never a market edge."""
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
+from alphaverdict.agents.council import AuditCouncil
+from alphaverdict.audit.ledger import TrialLedger
+from alphaverdict.audit.models import AuditConfig, AuditReport
 from alphaverdict.data.bundle import DataBundle
-from alphaverdict.data.technicals import momentum
+from alphaverdict.data.contracts import DataRequest
+from alphaverdict.data.reference import RealMomentumStrategy, YFinanceBundleAdapter
+from alphaverdict.engine.backtest import BacktestEngine
+from alphaverdict.engine.models import BacktestConfig, BacktestResult, RebalanceFrequency
+from alphaverdict.report.render import RunArtifacts, write_run_report
 from alphaverdict.strategy.base import StockStrategy
 from alphaverdict.strategy.context import ResearchSnapshot
 
@@ -114,8 +124,8 @@ class DemoEvidenceStrategy(StockStrategy):
     momentum_sessions: int = 63
 
     def score(self, snapshot: ResearchSnapshot) -> pd.DataFrame:
-        prices = snapshot.price_history(sessions=self.momentum_sessions + 1)
-        price_score = momentum(prices, self.momentum_sessions)
+        snapshot.price_history(sessions=self.momentum_sessions + 1)
+        price_score = snapshot.trailing_momentum(self.momentum_sessions)
         quality = snapshot.latest_features(["quality_score"]).get(
             "quality_score", pd.Series(dtype=float)
         )
@@ -141,3 +151,114 @@ class DemoEvidenceStrategy(StockStrategy):
         frame["eligible"] = frame[["price", "quality"]].notna().all(axis=1)
         frame["rationale"] = "synthetic momentum + quality + news example"
         return frame.reset_index()[["symbol", "score", "eligible", "rationale"]]
+
+
+@dataclass(frozen=True)
+class DemoOutcome:
+    """Complete result of one demo invocation, ready for rendering or testing."""
+
+    result: BacktestResult
+    audit: AuditReport
+    artifacts: RunArtifacts
+
+
+def _run_and_audit(
+    bundle: DataBundle,
+    strategy: StockStrategy,
+    config: BacktestConfig,
+    audit_config: AuditConfig | None,
+    output: Path,
+) -> DemoOutcome:
+    backtest_started = time.perf_counter()
+    engine = BacktestEngine(config)
+    result = engine.run(bundle, strategy)
+    backtest_seconds = time.perf_counter() - backtest_started
+    ledger = TrialLedger(Path.cwd() / "trials.jsonl")
+    ledger.record_result(result, kind="demo")
+    audit_started = time.perf_counter()
+    audit = AuditCouncil(trials_ledger_path=str(ledger.path)).review(
+        bundle, strategy, engine, result, audit_config
+    )
+    audit_seconds = time.perf_counter() - audit_started
+    result.manifest["timings"] = {
+        "backtest_seconds": round(backtest_seconds, 4),
+        "audit_seconds": round(audit_seconds, 4),
+    }
+    artifacts = write_run_report(result, audit, output)
+    return DemoOutcome(result=result, audit=audit, artifacts=artifacts)
+
+
+def run_synthetic_demo(
+    output: Path = Path("demo-runs"),
+    seed: int = 7,
+    *,
+    sessions: int = 520,
+    fast_audit: bool = False,
+) -> DemoOutcome:
+    """Exercise every layer with clearly labelled synthetic data."""
+    bundle = synthetic_bundle(seed=seed, sessions=sessions)
+    strategy = DemoEvidenceStrategy(momentum_sessions=63 if sessions > 200 else 30)
+    config = BacktestConfig(
+        rebalance=RebalanceFrequency.WEEKLY,
+        top_k=3,
+        max_weight=0.40,
+        benchmark_symbol="DEMO-BENCH",
+        seed=seed,
+    )
+    audit_config = (
+        AuditConfig(
+            bootstrap_simulations=100,
+            permutation_simulations=100,
+            cost_multipliers=(0.0, 1.0, 2.0),
+            causality_cutoffs=2,
+            stability_folds=2,
+            seed=seed,
+        )
+        if fast_audit
+        else AuditConfig(bootstrap_simulations=200, permutation_simulations=200, seed=seed)
+    )
+    return _run_and_audit(bundle, strategy, config, audit_config, output)
+
+
+def run_real_demo(
+    output: Path = Path("demo-runs"),
+    *,
+    symbols: tuple[str, ...] | list[str] | None = None,
+    benchmark: str = "SPY",
+    period: str = "5y",
+    top_k: int = 5,
+    max_weight: float = 0.20,
+    commission_bps: float = 5.0,
+    slippage_bps: float = 10.0,
+    seed: int = 7,
+    fast_audit: bool = False,
+) -> DemoOutcome:
+    """Run the reference momentum contract on public market data via yfinance."""
+    options: dict[str, Any] = {"benchmark": benchmark, "period": period}
+    if symbols is not None:
+        options["symbols"] = tuple(symbols)
+    adapter = YFinanceBundleAdapter(**options)
+    bundle = adapter.load(DataRequest())
+    strategy = RealMomentumStrategy(benchmark_symbol=adapter.benchmark)
+    config = BacktestConfig(
+        rebalance=RebalanceFrequency.WEEKLY,
+        top_k=top_k,
+        max_weight=max_weight,
+        commission_bps=commission_bps,
+        slippage_bps=slippage_bps,
+        benchmark_symbol=adapter.benchmark,
+        seed=seed,
+    )
+    audit_config = (
+        AuditConfig(
+            bootstrap_simulations=100,
+            permutation_simulations=100,
+            causality_cutoffs=2,
+            stability_folds=2,
+            seed=seed,
+        )
+        if fast_audit
+        else AuditConfig(seed=seed)
+    )
+    outcome = _run_and_audit(bundle, strategy, config, audit_config, output)
+    return outcome

@@ -4,16 +4,20 @@ build-backend = "hatchling.build"
 
 [project]
 name = "alphaverdict"
-version = "0.1.0"
-description = "A point-in-time, adversarial research engine for stock strategies."
+dynamic = ["version"]
+description = "Adversarial research verdicts for stock strategies - deterministic reviewers that try to falsify your backtest."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "AlphaVerdict contributors" }]
 keywords = [
+  "adversarial-audit",
+  "ai-agents",
+  "algorithmic-trading",
   "backtesting",
   "finance",
+  "mcp",
   "point-in-time",
   "quantitative-research",
   "stocks",
@@ -44,6 +48,7 @@ dependencies = [
 
 [project.optional-dependencies]
 parquet = ["pyarrow>=23.0.1,<26"]
+real = ["yfinance>=0.2.66,<2"]
 dev = [
   "bandit[toml]>=1.8.6,<2",
   "build>=1.2.2,<2",
@@ -66,12 +71,17 @@ docs = [
 alphaverdict = "alphaverdict.cli:app"
 
 [project.urls]
+Homepage = "https://github.com/omrgpt/alpha-verdict"
 Documentation = "https://github.com/omrgpt/alpha-verdict/tree/main/docs"
 Issues = "https://github.com/omrgpt/alpha-verdict/issues"
 Source = "https://github.com/omrgpt/alpha-verdict"
 
 [project.entry-points."alphaverdict.data_adapters"]
 csv = "alphaverdict.data.csv:CSVBundleAdapter"
+yfinance = "alphaverdict.data.reference:YFinanceBundleAdapter"
+
+[tool.hatch.version]
+path = "src/alphaverdict/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/alphaverdict"]
@@ -82,6 +92,9 @@ include = [
   "/tests",
   "/docs",
   "/examples",
+  "/scripts",
+  "/action.yml",
+  "/.github",
   "/README.md",
   "/LICENSE",
   "/NOTICE",
@@ -163,7 +176,7 @@ packages = ["alphaverdict"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["numpy.*", "pandas.*"]
+module = ["numpy.*", "pandas.*", "yfinance.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 

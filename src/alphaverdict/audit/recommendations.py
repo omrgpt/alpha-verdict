@@ -16,6 +16,9 @@ RECOMMENDATIONS: dict[str, str] = {
     "REGIME_INSTABILITY": "Describe the failing regime explicitly and test a pre-declared exposure gate rather than tuning on the full sample.",
     "FOLD_INSTABILITY": "Simplify the rule or broaden the sample; a stable edge should not depend on one contiguous window.",
     "MULTIPLE_TESTING": "Record the complete strategy search and lower confidence according to the true number of attempted variants.",
+    "TRIALS_UNDERDECLARED": "Raise audit.n_trials to the ledger-recorded variant count; deflated Sharpe must reflect the real search.",
+    "TRIALS_LEDGER_MISSING": "Start the automatic trial ledger so every attempted variant is recorded and auditable.",
+    "TRIALS_LEDGER_TAMPERED": "Restore the trial ledger from backup or restart it with an explicit note; treat dependent verdicts as void.",
     "TRACK_RECORD_SHORT": "Collect more independent out-of-sample periods before drawing a performance conclusion.",
     "BENCHMARK_MISSING": "Provide a point-in-time benchmark series so alpha, beta, and regime claims can be evaluated.",
 }
