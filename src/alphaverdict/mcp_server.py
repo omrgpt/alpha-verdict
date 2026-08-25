@@ -113,12 +113,35 @@ class FindingKnowledge:
         "BENCHMARK_MISSING": {
             "severity": "medium",
             "summary": "No point-in-time benchmark series was supplied.",
-            "remediation": "Configure a benchmark symbol present in user-owned prices.",
+            "remediation": (
+                "Configure a benchmark symbol present in user-owned prices."
+            ),
         },
         "REGIME_INSTABILITY": {
             "severity": "medium",
             "summary": "Performance concentrates in one coarse benchmark regime.",
             "remediation": "Treat regime dependence as a hypothesis needing fresh data.",
+        },
+        "TRIALS_LEDGER_MISSING": {
+            "severity": "medium",
+            "summary": "No research diary records what was attempted.",
+            "remediation": (
+                "Enable the automatic trial ledger; undeclared searches overstate confidence."
+            ),
+        },
+        "TRIALS_UNDERDECLARED": {
+            "severity": "high",
+            "summary": "Recorded search exceeds the declared n_trials burden.",
+            "remediation": (
+                "Raise audit.n_trials to the recorded variant count and recheck deflated Sharpe."
+            ),
+        },
+        "TRIALS_LEDGER_TAMPERED": {
+            "severity": "critical",
+            "summary": "Trial ledger hash chain failed verification.",
+            "remediation": (
+                "Restore from backup or restart with a written note; do not trust dependent verdicts."
+            ),
         },
         "PERFORMANCE_SAMPLE_SMALL": {
             "severity": "medium",

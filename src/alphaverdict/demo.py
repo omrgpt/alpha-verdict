@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from alphaverdict.agents.council import AuditCouncil
+from alphaverdict.audit.ledger import TrialLedger
 from alphaverdict.audit.models import AuditConfig, AuditReport
 from alphaverdict.data.bundle import DataBundle
 from alphaverdict.data.contracts import DataRequest
@@ -172,8 +173,12 @@ def _run_and_audit(
     engine = BacktestEngine(config)
     result = engine.run(bundle, strategy)
     backtest_seconds = time.perf_counter() - backtest_started
+    ledger = TrialLedger(Path.cwd() / "trials.jsonl")
+    ledger.record_result(result, kind="demo")
     audit_started = time.perf_counter()
-    audit = AuditCouncil().review(bundle, strategy, engine, result, audit_config)
+    audit = AuditCouncil(trials_ledger_path=str(ledger.path)).review(
+        bundle, strategy, engine, result, audit_config
+    )
     audit_seconds = time.perf_counter() - audit_started
     result.manifest["timings"] = {
         "backtest_seconds": round(backtest_seconds, 4),

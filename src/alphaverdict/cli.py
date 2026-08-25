@@ -12,6 +12,7 @@ from rich.table import Table
 
 from alphaverdict._version import __version__
 from alphaverdict.agents.council import AuditCouncil
+from alphaverdict.audit.ledger import TrialLedger
 from alphaverdict.config.reader import load_project
 from alphaverdict.demo import run_real_demo, run_synthetic_demo
 from alphaverdict.engine.screen import screen as run_screen
@@ -138,6 +139,9 @@ def backtest(
     as_json: Annotated[
         bool, typer.Option("--json", help="Emit a machine-readable verdict summary.")
     ] = False,
+    no_ledger: Annotated[
+        bool, typer.Option("--no-ledger", help="Skip appending this run to trials.jsonl.")
+    ] = False,
 ) -> None:
     """Run causal research, the audit council, and a portable evidence report."""
     try:
@@ -146,7 +150,14 @@ def backtest(
         strategy = project.make_strategy()
         engine = project.make_engine()
         result = engine.run(bundle, strategy)
-        audit = AuditCouncil().review(bundle, strategy, engine, result, project.audit)
+        if not no_ledger:
+            ledger = TrialLedger(project.root / "trials.jsonl")
+            ledger.record_result(result)
+            audit = AuditCouncil(trials_ledger_path=str(ledger.path)).review(
+                bundle, strategy, engine, result, project.audit
+            )
+        else:
+            audit = AuditCouncil().review(bundle, strategy, engine, result, project.audit)
         artifacts = write_run_report(result, audit, project.output_path)
     except (AlphaVerdictError, OSError, TypeError, ValueError) as exc:
         _fail(exc)
@@ -295,3 +306,74 @@ def demo(
 def mcp_command() -> None:
     """Serve deterministic verdict tools over the Model Context Protocol (stdio)."""
     raise typer.Exit(code=serve_mcp())
+
+
+ledger_app = typer.Typer(help="Inspect and verify the append-only trial ledger.")
+app.add_typer(ledger_app, name="ledger")
+
+
+@ledger_app.command("show")
+def ledger_show(
+    path: Annotated[Path, typer.Option("--path", help="Ledger file.")] = Path("trials.jsonl"),
+) -> None:
+    """Print every chained entry: runs and manual notes."""
+    entries = TrialLedger(path).entries()
+    if not entries:
+        console.print("Ledger is empty or missing; runs append automatically.")
+        return
+    table = Table(title=f"{len(entries)} ledger entries | {path}")
+    for column in ("#", "time", "kind", "strategy", "label"):
+        table.add_column(column)
+    for item in entries:
+        table.add_row(
+            str(item.index),
+            item.timestamp,
+            item.kind,
+            item.strategy_name or "-",
+            item.label or "-",
+        )
+    console.print(table)
+    intact, bad_index = TrialLedger(path).verify()
+    console.print(
+        "[bold green]Hash chain intact[/bold green]"
+        if intact
+        else f"[bold red]Chain broken at entry {bad_index}[/bold red]"
+    )
+
+
+@ledger_app.command("verify")
+def ledger_verify(
+    path: Annotated[Path, typer.Option("--path", help="Ledger file.")] = Path("trials.jsonl"),
+) -> None:
+    """Recompute the hash chain and report the first broken entry."""
+    intact, bad_index = TrialLedger(path).verify()
+    if intact:
+        count = len(TrialLedger(path).entries())
+        console.print(f"[bold green]Intact[/bold green] — {count} entries verified.")
+    else:
+        console.print(f"[bold red]TAMPERED[/bold red] — chain breaks at entry {bad_index}.")
+        raise typer.Exit(code=1)
+
+
+@ledger_app.command("note")
+def ledger_note(
+    label: Annotated[str, typer.Argument(help="Milestone description.")],
+    path: Annotated[Path, typer.Option("--path", help="Ledger file.")] = Path("trials.jsonl"),
+) -> None:
+    """Append a manual milestone (hypothesis change, parameter freeze, holdout declaration)."""
+    entry = TrialLedger(path).record_note(label)
+    console.print(f"Noted as entry #{entry.index} · hash {entry.entry_hash[:12]}…")
+
+
+@app.command()
+def selfcheck() -> None:
+    """Run the adversarial bias zoo: prove the council catches every planted trap."""
+    from alphaverdict.selfcheck.zoo import run_self_check  # noqa: PLC0415 - keeps CLI import light
+
+    failures = run_self_check(console.print)
+    if failures:
+        console.print(f"[bold red]SELF-CHECK FAILED:[/bold red] {len(failures)} case(s):")
+        for name in failures:
+            console.print(f"  - {name}")
+        raise typer.Exit(code=1)
+    console.print("[bold green]All adversarial cases detected.[/bold green]")

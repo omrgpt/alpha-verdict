@@ -59,3 +59,8 @@ secrets*.json
 _asset-runs/
 smoke-runs/
 
+
+# Local torture-test scratch
+trials.jsonl*
+_torture-report/
+torture/

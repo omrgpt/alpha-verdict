@@ -55,14 +55,26 @@ and which reasons should stop me from believing this result?"**
 | Reviewer | Questions it tries to falsify |
 | --- | --- |
 | Data integrity | Impossible OHLC rows? Undeclared adjustment policy? Survivorship unproven? Synthetic data posing as real? |
-| Causality | Do repeated runs change? Do past signals change when future data is corrupted? |
+| Causality | Do repeated runs change? Do past signals change when future data — or bundle metadata — is corrupted? Does output depend on evaluation order (stale warmup state)? |
 | Performance | Sample too small? Sharpe too extreme? Edge too close to friction? One stock dominating contributions? |
 | Robustness | Does it die across contiguous folds, cost stress multiples, bootstrap paths, or coarse regimes? |
 | Statistics | Does it survive track-record length, sign randomization, deflated Sharpe, and declared search burden? |
+| Trials | Does your recorded research history actually contain the number of variants you declared? Is the ledger's hash chain intact? |
 
 Findings are stable machine-readable codes (`COST_FRAGILE`, `DATA_TEMPORAL_LEAK`,
-`MULTIPLE_TESTING`, …) with recommendations linked to evidence. The verdict is
-deterministic: same inputs, same verdict, every time.
+`MULTIPLE_TESTING`, `TRIALS_UNDERDECLARED`, …) with recommendations linked to
+evidence. The verdict is deterministic: same inputs, same verdict, every time.
+
+Two features make the audit self-verifying:
+
+- **Trial ledger.** Every run appends itself to a hash-chained `trials.jsonl`
+  research diary; the trials reviewer reconciles it against the `n_trials` you
+  declare, so Deflated Sharpe reflects evidence instead of self-report.
+  [Read how →](docs/trial-ledger.md)
+- **Self-Check bias zoo.** `alphaverdict selfcheck` runs nine planted-trap
+  cases — metadata look-ahead smuggling, frozen warmup state, ledger tampering,
+  and more — and fails if the council misses any of them. The auditor
+  continuously tests itself. [Meet the traps →](docs/selfcheck.md)
 
 ## Built for the agent era
 

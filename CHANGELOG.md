@@ -6,6 +6,34 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Trial ledger** (`alphaverdict ledger`): every backtest and demo run appends
+  to an append-only, hash-chained `trials.jsonl` with a `.head` completeness
+  checkpoint. A sixth council reviewer (TrialsAgent) reconciles the recorded
+  variant count against the declared `audit.n_trials`, raising
+  `TRIALS_LEDGER_MISSING` / `TRIALS_UNDERDECLARED` / `TRIALS_LEDGER_TAMPERED`
+  so Deflated Sharpe reflects evidence, not self-report.
+- **Self-Check bias zoo** (`alphaverdict selfcheck`): nine planted-trap cases —
+  metadata look-ahead smuggling, frozen warmup state, nondeterminism, broken
+  OHLC, temporal feature leaks, undisclosed survivorship, cost fragility,
+  ledger tampering, understated search burden — that the council must catch or
+  the command fails. The auditor now continuously tests itself.
+- Causality reviewer gains a stale-warmup probe (`STRATEGY_STATEFUL_WARMUP`)
+  detecting strategies whose output depends on evaluation order.
+- Future-perturbation probe now also corrupts bundle metadata: metadata is not
+  temporally governed, so strategies that derive scores from it are flagged as
+  non-causal instead of slipping through.
+
+### Fixed
+
+- Report HTML autoescape was silently disabled because `select_autoescape`
+  keys on the template's final extension (`.j2`); data-derived strings could
+  reach `report.html` unescaped. Autoescape is now explicit and a regression
+  test locks hostile strings out of reports.
+- Strategies returning an empty column-less frame ("nothing eligible yet")
+  no longer crash the strategy contract; they normalize to canonical columns.
+
 ### Planned
 
 - External adapter conformance kit and independently reproduced reference fixtures.

@@ -29,6 +29,8 @@ nav:
   - Research integrity:
       - Methodology: methodology.md
       - Audit council: audit-council.md
+      - Trial ledger: trial-ledger.md
+      - Self-Check bias zoo: selfcheck.md
       - Walk-forward: walkforward.md
       - Reproducibility: reproducibility.md
   - AI agents:

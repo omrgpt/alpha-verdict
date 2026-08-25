@@ -34,6 +34,17 @@ class SignalSet:
         result = frame.copy()
         if result.index.name == "symbol" and "symbol" not in result:
             result = result.reset_index()
+        if result.empty and not {"symbol", "score"}.issubset(result.columns):
+            # An empty output is a valid "nothing is eligible yet" answer; give it
+            # the canonical shape instead of failing the strategy contract.
+            result = pd.DataFrame(
+                {
+                    "symbol": pd.Series([], dtype="string"),
+                    "score": pd.Series([], dtype="float64"),
+                    "eligible": pd.Series([], dtype="bool"),
+                    "rationale": pd.Series([], dtype="object"),
+                }
+            )
         missing = {"symbol", "score"} - set(result.columns)
         if missing:
             raise StrategyContractError(
