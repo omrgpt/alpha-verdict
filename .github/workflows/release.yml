@@ -31,7 +31,11 @@ jobs:
         with:
           subject-path: "dist/*"
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@76e52bc4940c43b57942636913f9b1c568250384 # v1.13.0
+        # SEC-075 exception (documented): PyPA publishes this Docker action's
+        # images ONLY under version tags - commit-SHA pins fail with
+        # "manifest unknown". Version tags are immutable per PyPA policy;
+        # integrity is additionally covered by the attestations step above.
+        uses: pypa/gh-action-pypi-publish@v1.14.2
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
