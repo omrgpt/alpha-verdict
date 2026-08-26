@@ -3,7 +3,7 @@
 This file wires alpha-verdict to the Ruler compliance library. It is a
 pointer, not a copy: the library lives at
 **https://github.com/omrgpt/ruler** (canonical, always current). Never paste
-requirement text here â€” link instead â€” so rule updates propagate everywhere
+requirement text here — link instead — so rule updates propagate everywhere
 without editing every project.
 
 ## How to fetch the requirements (any agent, any machine)
@@ -19,7 +19,7 @@ gh repo clone omrgpt/ruler "$TEMP/ruler" -- --depth 1
 gh api repos/omrgpt/ruler/contents/docs/requirements/security-authentication.md -H "Accept: application/vnd.github.raw"
 ```
 
-Local checkout (this PC): `C:\Users\PC\Documents\ruler` â€” use it if present;
+Local checkout (this PC): `C:\Users\PC\Documents\ruler` — use it if present;
 it is kept in sync with GitHub and is faster. If both exist and disagree,
 **GitHub wins**.
 
@@ -30,14 +30,14 @@ to every project and every agent.
 
 | Area | File in `docs/requirements/` | IDs |
 |---|---|---|
-| Security, auth, web vulnerabilities, pipeline | security-authentication.md | SEC-001â€¦087 |
-| Mobile apps | mobile.md | MOB-064â€¦069 |
-| Backend performance & deletion mechanics | backend-performance.md | PERF-069â€¦080 |
-| Legal, GCC PDPL / GDPR, minors, AI privacy | legal-compliance-gcc-gdpr.md | LEG-075â€¦100 |
-| SEO, metadata & production config | seo-metadata-production.md | SEO-096â€¦109 |
-| Conversion & content | conversion-content.md | CRO-085â€¦104 |
-| UI, UX & frontend | ui-ux-frontend.md | UIX-105â€¦119 |
-| Analytics & monitoring | analytics-monitoring.md | OPS-120â€¦129 |
+| Security, auth, web vulnerabilities, pipeline | security-authentication.md | SEC-001…087 |
+| Mobile apps | mobile.md | MOB-064…069 |
+| Backend performance & deletion mechanics | backend-performance.md | PERF-069…080 |
+| Legal, GCC PDPL / GDPR, minors, AI privacy | legal-compliance-gcc-gdpr.md | LEG-075…100 |
+| SEO, metadata & production config | seo-metadata-production.md | SEO-096…109 |
+| Conversion & content | conversion-content.md | CRO-085…104 |
+| UI, UX & frontend | ui-ux-frontend.md | UIX-105…119 |
+| Analytics & monitoring | analytics-monitoring.md | OPS-120…129 |
 | Tool costs & paid-plan behavior | tooling-costs.md | cost map |
 
 ### Hard rules
@@ -58,6 +58,6 @@ to every project and every agent.
    live only in gitignored `.env` files / secret managers (SEC-002, SEC-003).
 6. **IDs are permanent.** To propose new requirements, append the next unused
    ID in the correct category file IN THE RULER REPO and mirror the row in
-   its master checklist â€” never renumber or reuse. Deviations need an entry
+   its master checklist — never renumber or reuse. Deviations need an entry
    in the Exceptions Register of the relevant file.
 
