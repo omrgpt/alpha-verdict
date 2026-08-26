@@ -4,12 +4,14 @@
 
 # AlphaVerdict
 
-**Your LLM can write a trading strategy in 30 seconds. AlphaVerdict tells you if you can trust it.**
+**A red team for your backtest.**
 
-Five deterministic reviewers try to falsify your backtest before the market does —
-checking causality, look-ahead leakage, survivorship, cost fragility, robustness,
-and multiple-testing burden. Every conclusion is a stable finding code linked to
-evidence, not prose vibes.
+Your LLM can write a trading strategy in 30 seconds. Nobody checks whether it's
+true. AlphaVerdict is the missing counterweight: a deterministic council of six
+reviewers that actively tries to falsify your backtest — leak probes, causality
+perturbation, cost stress, overfitting statistics — then tells you, with
+evidence from *your own run*, what to test next. No API keys, no cloud, no
+AI bills: pure offline Python that gives the same verdict every time.
 
 [![CI](https://github.com/omrgpt/alpha-verdict/actions/workflows/ci.yml/badge.svg)](https://github.com/omrgpt/alpha-verdict/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/alphaverdict?style=flat-square&color=teal)](https://pypi.org/project/alphaverdict/)
@@ -19,31 +21,72 @@ evidence, not prose vibes.
 
 ---
 
-## See it in 60 seconds
+## Five minutes to your first verdict
 
 ```bash
-uvx alphaverdict demo            # synthetic fixture; proves the plumbing
-uvx alphaverdict demo --real     # public market data via the bundled reference adapter
+pip install alphaverdict
+git clone https://github.com/omrgpt/alpha-verdict.git alpha-examples
+cd alpha-examples/examples/quickstart
+alphaverdict backtest        # complete multimodal project: prices + fundamentals + news
+```
+
+You bring two things — **your data** and **one strategy file**. Everything in
+between is already built: validation, screening, causal backtesting, the six
+reviewers, the report, and strategy-specific recommendations.
+
+Or see the machinery prove itself:
+
+```bash
+alphaverdict demo --show-catch   # runs an honest demo AND a corrupted twin;
+                                 # watches the council catch the planted leak live
 ```
 
 Every run writes an immutable evidence bundle:
 
 ```
 demo-runs/<run-id>/
-├── report.html      # self-contained human review with the verdict card
+├── report.html      # verdict card, equity paths, diagnosed next experiments
 ├── result.json      # returns, holdings, signals, metrics
-├── audit.json       # findings, evidence, recommendations
+├── audit.json       # findings, evidence, ranked experiments, strengths
 └── manifest.json    # hashes and reproducibility identity
 ```
-
-See two real outputs produced by this repository's own build:
-[a typical research run](docs/examples/report-pass.html) and a
-[sabotaged run](docs/examples/report-fail.html) where we corrupted data timestamps
-on purpose — the council caught it instantly.
 
 > [!CAUTION]
 > AlphaVerdict is research software, not investment advice. A `PASS` verdict means
 > only that this run survived the configured tests.
+
+## What makes it different: it diagnoses YOUR strategy
+
+Other tools print metrics and leave you alone with them. When AlphaVerdict's
+reviewers find something, the diagnostician turns **this run's measurements**
+into a ranked experiment list — observation from your data, exact command to
+re-run, and how to read both outcomes:
+
+```
+Diagnosed next experiments for THIS strategy
+
+#1  Test dependence on your three biggest contributors          [HIGH]
+    FORR, GLDW, HRZN drive 81.0% of absolute profit contribution.
+    Run this: denylist those symbols in score() and compare Sharpe.
+    How to read it: survives → broad repeatable edge; vanishes → concentration luck.
+
+#2  Stress your edge against costs at the measured breakeven    [HIGH]
+    Gross edge ~14.2 bps per unit traded vs 15.0 bps configured (0.9x headroom).
+    Run this: set combined costs to 14 bps, then half that.
+    How to read it: dying before breakeven means simulation artifact, not research.
+
+#3  Check whether profits come from one lucky window            [HIGH]
+    Split into quarters, 2/4 compounded positively; losing windows: -8.3%, -1.9%.
+    Run this: alphaverdict walkforward --train 26 --test 13 --embargo 2
+```
+
+And it reports **what held up** too — balanced verdicts, not scaremongering:
+
+```
+What held up
+  + Signals are causally clean: repeated evaluation and future-data corruption left decisions unchanged
+  + Beat its benchmark by 4.1% over the window
+```
 
 ## Why most backtests are lying to you
 
@@ -120,21 +163,25 @@ Your strategy is one ordinary Python class. The same contract drives today's
 screen and every historical decision — no separate "backtest version" that can
 silently drift.
 
+Strategies can combine **any data types your adapter supplies** — the bundled
+[quickstart example](examples/quickstart/) ranks on fundamentals + news +
+technicals in ~80 readable lines:
+
 ```python
 import pandas as pd
 
 from alphaverdict import ResearchSnapshot, StockStrategy
-from alphaverdict.data.technicals import momentum
 
 
 class Strategy(StockStrategy):
-    name = "twelve-month-strength"
-    minimum_history = 253
+    name = "quality-momentum-multimodal"
+    minimum_history = 73
 
     def score(self, snapshot: ResearchSnapshot) -> pd.DataFrame:
-        prices = snapshot.price_history(sessions=253)
-        scores = momentum(prices, lookback=252)
-        return scores.rename("score").rename_axis("symbol").reset_index()
+        margin = snapshot.latest_features(["gross_margin"])          # filings
+        news = snapshot.known_events(event_type="earnings_sentiment")  # news
+        momentum = snapshot.trailing_momentum(63)                    # prices
+        # ... rank each pillar cross-sectionally, blend 40/20/40 ...
 ```
 
 ### The point-in-time data contract
@@ -219,7 +266,7 @@ writing an adapter, and the full [threat model](docs/security.md) for details.
 
 ## Status and roadmap
 
-AlphaVerdict is `0.2.0` alpha software. The data contract and finding codes aim to
+AlphaVerdict is `0.4.0` alpha software. The data contract and finding codes aim to
 be stable; breaking changes remain possible before `1.0`. The roadmap prioritizes
 research validity over feature count — see [ROADMAP.md](ROADMAP.md). We will not
 add broker keys, automatic execution, unverifiable "AI picks," bundled proprietary

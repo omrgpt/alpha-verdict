@@ -4,6 +4,40 @@ All notable changes are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project intends to
 use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-26
+
+### Added
+
+- **Strategy diagnosis engine** (`audit/diagnose.py`): turns each run's own
+  measurements — contribution tables, cost curves, fold returns, regime splits,
+  benchmark gaps — into ranked, strategy-specific next experiments. Every
+  experiment cites the numbers that triggered it, names the exact re-run
+  (config keys, CLI commands, denylist edits), and explains how to read both
+  outcomes. Eight deterministic rules; identical inputs always produce
+  identical prescriptions.
+- **Balanced verdicts**: `AuditReport.strengths` names what measurably held up
+  (causal cleanliness, plausible Sharpe band, benchmark outperformance,
+  modest turnover) so PASS/WARN/FAIL comes with context, not scaremongering.
+- **`alphaverdict demo --show-catch`**: demo theater — runs the honest synthetic
+  demo, then a deliberately corrupted twin (fundamentals rows made knowable 30
+  days before observation), and prints the lie being caught with finding codes.
+- **Runnable example gallery** (`examples/quickstart/`): a complete
+  self-contained project — bundled prices/fundamentals/events/universe CSVs
+  plus a true multimodal strategy combining gross-margin quality, earnings
+  sentiment, and volatility-normalized momentum in ~80 readable lines.
+  `cd examples/quickstart && alphaverdict backtest` works out of the box.
+- Diagnoses and strengths flow into `report.html` (new panels), `audit.json`,
+  and `backtest --json` output.
+
+### Fixed
+
+- Demo verdicts no longer polluted by cross-run ledger state: `demo --show-catch`
+  twins are judged on their own merits.
+
+### Changed
+
+- README repositioned around the validated wedge: "A red team for your backtest."
+
 ## [Unreleased]
 
 ### Added

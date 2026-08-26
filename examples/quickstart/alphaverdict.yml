@@ -1,0 +1,41 @@
+version: 1
+
+data:
+  adapter: csv
+  options:
+    prices: data/prices.csv
+    features: data/fundamentals.csv
+    events: data/events.csv
+    universe: data/universe.csv
+    metadata:
+      price_adjustment: split_and_dividend_adjusted
+      survivorship: point_in_time
+      data_classification: synthetic_sample
+
+strategy: strategy.py:QualityMomentumStrategy
+
+request:
+  start: "2022-06-01"
+
+screen:
+  top_n: 5
+
+backtest:
+  rebalance: monthly
+  top_k: 3
+  max_weight: 0.45
+  benchmark_symbol: INDEX
+  commission_bps: 5
+  slippage_bps: 10
+  seed: 7
+
+audit:
+  bootstrap_simulations: 200
+  permutation_simulations: 200
+  cost_multipliers: [0.0, 1.0, 2.0]
+  stability_folds: 4
+  causality_cutoffs: 3
+  n_trials: 3
+  seed: 7
+
+output_dir: runs
