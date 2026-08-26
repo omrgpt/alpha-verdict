@@ -99,6 +99,36 @@ class AgentReport:
 
 
 @dataclass(frozen=True)
+class StrategyExperiment:
+    """One ranked, evidence-linked next test prescribed for THIS strategy.
+
+    Diagnoses are derived deterministically from a run's own measurements:
+    contribution tables, cost curves, fold returns, and regime splits. Each
+    experiment tells the user exactly what to re-run and how to read both
+    outcomes — advice grounded in their data, never generic prose.
+    """
+
+    rank: int
+    title: str
+    observation: str
+    experiment: str
+    rationale: str
+    source_codes: tuple[str, ...] = ()
+    severity: Severity = Severity.INFO
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "rank": self.rank,
+            "title": self.title,
+            "observation": self.observation,
+            "experiment": self.experiment,
+            "rationale": self.rationale,
+            "source_codes": list(self.source_codes),
+            "severity": self.severity.label,
+        }
+
+
+@dataclass(frozen=True)
 class AuditReport:
     """Merged verdict from independent, deterministic review agents."""
 
@@ -108,6 +138,8 @@ class AuditReport:
     agent_reports: tuple[AgentReport, ...]
     recommendations: tuple[str, ...]
     caveat: str
+    diagnoses: tuple[StrategyExperiment, ...] = ()
+    strengths: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -115,6 +147,8 @@ class AuditReport:
             "score": self.score,
             "caveat": self.caveat,
             "recommendations": list(self.recommendations),
+            "diagnoses": [item.to_dict() for item in self.diagnoses],
+            "strengths": list(self.strengths),
             "findings": [finding.to_dict() for finding in self.findings],
             "agents": [report.to_dict() for report in self.agent_reports],
         }

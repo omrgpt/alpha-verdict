@@ -40,7 +40,18 @@
     <article class="panel third"><div class="eyebrow">Evaluated periods</div><div class="score">{{ result.returns|length }}</div><div class="muted">{{ result.config.rebalance.value }} rebalance</div></article>
     <article class="panel"><h2>Equity path</h2>{{ equity_svg|safe }}<p class="muted">Teal: strategy · gray: configured benchmark. Hypothetical, after configured friction.</p></article>
     <article class="panel"><h2>Research metrics</h2><div class="metrics">{% for name, value in metrics %}<div class="metric"><span class="muted">{{ name }}</span><strong>{{ value }}</strong></div>{% endfor %}</div></article>
+    <article class="panel half"><h2>What held up</h2><ul>{% for item in audit.strengths %}<li>{{ item }}</li>{% else %}<li>Nothing cleared the configured reviewers cleanly yet.</li>{% endfor %}</ul></article>
     <article class="panel half"><h2>Priority validation work</h2><ol>{% for item in audit.recommendations %}<li>{{ item }}</li>{% else %}<li>No additional recommendation was generated.</li>{% endfor %}</ol></article>
+    {% if audit.diagnoses %}<article class="panel"><h2>Diagnosed next experiments — specific to this strategy</h2>
+      <ol>{% for item in audit.diagnoses %}
+        <li class="finding"><strong>{{ item.title }}</strong>
+          <p>{{ item.observation }}</p>
+          <p><strong>Run this:</strong> {{ item.experiment }}</p>
+          <p class="muted"><strong>How to read it:</strong> {{ item.rationale }}</p>
+        </li>
+      {% endfor %}</ol>
+      <p class="muted">Every experiment is derived from this run's own measurements. Same inputs will always produce the same prescriptions.</p>
+    </article>{% endif %}
     <article class="panel half"><h2>Run identity</h2><p class="muted">Data</p><code>{{ result.data_fingerprint }}</code><p class="muted">Strategy</p><code>{{ result.strategy_fingerprint }}</code></article>
     <article class="panel"><h2>Findings</h2>{% for finding in audit.findings %}<div class="finding"><span class="tag {{ finding.severity.label }}">{{ finding.severity.label }}</span> <strong>{{ finding.code }} · {{ finding.title }}</strong><p>{{ finding.evidence }}</p><p class="muted">Next: {{ finding.recommendation }}</p></div>{% else %}<p>No configured reviewer produced a finding.</p>{% endfor %}</article>
     <article class="panel"><h2>Research boundary</h2><p>{{ audit.caveat }}</p>{% for warning in result.warnings %}<p class="muted">{{ warning }}</p>{% endfor %}</article>

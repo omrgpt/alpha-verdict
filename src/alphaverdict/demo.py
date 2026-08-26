@@ -220,6 +220,54 @@ def run_synthetic_demo(
     return _run_and_audit(bundle, strategy, config, audit_config, output)
 
 
+def run_corrupted_demo(
+    output: Path = Path("demo-runs"),
+    seed: int = 7,
+    *,
+    sessions: int = 520,
+) -> DemoOutcome:
+    """Demo twin with timestamps deliberately corrupted on a few feature rows.
+
+    The synthetic fixture is identical to ``run_synthetic_demo`` except that
+    several fundamentals rows claim to be knowable before they were observed —
+    the classic research leak. The council must catch it; this function exists
+    so users can watch the lie detection happen in their first five minutes.
+    """
+    bundle = synthetic_bundle(seed=seed, sessions=sessions)
+    features = bundle.features.copy()
+    if features.empty:
+        raise ValueError("synthetic fixture unexpectedly has no feature rows")
+    leak_count = max(3, min(8, len(features) // 40))
+    positions = sorted(features.index[:leak_count])
+    for position in positions:
+        observed = features.at[position, "observed_at"]
+        features.at[position, "available_at"] = observed - pd.Timedelta(days=30)
+    leaked = DataBundle(
+        prices=bundle.prices,
+        features=features,
+        events=bundle.events,
+        universe=bundle.universe,
+        metadata={**bundle.metadata, "demo_mode": "deliberately_corrupted"},
+    )
+    strategy = DemoEvidenceStrategy(momentum_sessions=63 if sessions > 200 else 30)
+    config = BacktestConfig(
+        rebalance=RebalanceFrequency.WEEKLY,
+        top_k=3,
+        max_weight=0.40,
+        benchmark_symbol="DEMO-BENCH",
+        seed=seed,
+    )
+    audit_config = AuditConfig(
+        bootstrap_simulations=100,
+        permutation_simulations=100,
+        cost_multipliers=(0.0, 1.0),
+        causality_cutoffs=2,
+        stability_folds=2,
+        seed=seed,
+    )
+    return _run_and_audit(leaked, strategy, config, audit_config, output)
+
+
 def run_real_demo(
     output: Path = Path("demo-runs"),
     *,

@@ -13,6 +13,7 @@ from alphaverdict.agents.builtin import (
     StatisticalAgent,
     TrialsAgent,
 )
+from alphaverdict.audit.diagnose import diagnose, strengths_of
 from alphaverdict.audit.models import AuditConfig, AuditReport, Severity, Verdict
 from alphaverdict.audit.recommendations import recommendations_for
 from alphaverdict.data.bundle import DataBundle
@@ -80,6 +81,8 @@ class AuditCouncil:
             findings=findings,
             agent_reports=reports,
             recommendations=recommendations_for(findings),
+            diagnoses=diagnose(result, findings),
+            strengths=strengths_of(result, findings),
             caveat=(
                 "A pass means only that this run survived the configured tests. It is not evidence of future "
                 "returns, a recommendation, or permission to deploy capital."
