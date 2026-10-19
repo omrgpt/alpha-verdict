@@ -47,7 +47,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-parquet = ["pyarrow>=23.0.1,<26"]
+parquet = ["pyarrow>=23.0.1,<27"]
 real = ["yfinance>=0.2.66,<2"]
 dev = [
   "bandit[toml]>=1.8.6,<2",
